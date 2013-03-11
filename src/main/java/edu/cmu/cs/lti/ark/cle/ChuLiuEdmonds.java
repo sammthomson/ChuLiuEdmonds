@@ -1,16 +1,13 @@
-package edu.cmu.cs.lti.ark.mst;
+package edu.cmu.cs.lti.ark.cle;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.*;
 import com.sun.istack.internal.Nullable;
-import edu.cmu.cs.lti.ark.mst.graph.Edge;
-import edu.cmu.cs.lti.ark.mst.graph.Partition;
-import edu.cmu.cs.lti.ark.mst.graph.Weighted;
 
 import java.util.*;
 
-import static edu.cmu.cs.lti.ark.mst.graph.Partition.Component;
-import static edu.cmu.cs.lti.ark.mst.graph.Weighted.weighted;
+import static edu.cmu.cs.lti.ark.cle.Partition.Component;
+import static edu.cmu.cs.lti.ark.cle.Weighted.weighted;
 
 /**
  * Chu-Liu-Edmonds' algorithm for finding a maximum branching in a complete, directed graph.
@@ -94,9 +91,10 @@ public class ChuLiuEdmonds {
 			final List<Weighted<Edge<T>>> cycle = Lists.newArrayList();
 			// circle around until you get back to where you started
 			Weighted<Edge<T>> edge = newEdge;
+			cycle.add(edge);
 			while (!stronglyConnected.sameComponent(edge.val.source, newEdge.val.destination)) {
-				cycle.add(edge);
 				edge = incomingEdgeByScc.get(stronglyConnected.componentOf(edge.val.source));
+				cycle.add(edge);
 			}
 			return cycle;
 		}

@@ -1,4 +1,4 @@
-package edu.cmu.cs.lti.ark.mst.graph;
+package edu.cmu.cs.lti.ark.cle;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ComparisonChain;

@@ -1,6 +1,5 @@
-package edu.cmu.cs.lti.ark.mst;
+package edu.cmu.cs.lti.ark.cle;
 
-import edu.cmu.cs.lti.ark.mst.graph.Weighted;
 import org.junit.Test;
 
 import java.util.Map;

@@ -1,4 +1,4 @@
-package edu.cmu.cs.lti.ark.mst.graph;
+package edu.cmu.cs.lti.ark.cle;
 
 import com.google.common.base.Objects;
 
@@ -10,6 +10,10 @@ public class Edge<V> {
 	public Edge(V source, V destination) {
 		this.source = source;
 		this.destination = destination;
+	}
+
+	@Override public int hashCode() {
+		return Objects.hashCode(source, destination);
 	}
 
 	@Override public String toString() {
