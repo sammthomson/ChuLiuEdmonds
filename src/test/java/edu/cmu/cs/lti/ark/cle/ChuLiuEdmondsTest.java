@@ -2,6 +2,7 @@ package edu.cmu.cs.lti.ark.cle;
 
 import org.junit.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static junit.framework.Assert.assertEquals;
@@ -10,9 +11,10 @@ import static junit.framework.Assert.assertEquals;
  * @author sthomson@cs.cmu.edu
  */
 public class ChuLiuEdmondsTest {
+	private double NINF = Double.NEGATIVE_INFINITY;
+
 	@Test
-	public void testGetMaxBranching() {
-		double ninf = Double.NEGATIVE_INFINITY;
+	public void testGetMaxSpanningTree() {
 		/*
 		root    10
 		(0) -------> (1) \
@@ -26,11 +28,11 @@ public class ChuLiuEdmondsTest {
 		     40
 		 */
 		double[][] weights = {
-				{ ninf, 10, 30, 10, ninf },
-				{ ninf, ninf, 10, ninf, 10 },
-				{ ninf,  20, ninf,  7, 20 },
-				{ ninf, ninf, 40, ninf, ninf },
-				{ ninf, ninf, ninf, ninf, ninf},
+				{NINF, 10, 30, 10, NINF},
+				{NINF, NINF, 10, NINF, 10 },
+				{NINF,  20, NINF,  7, 20 },
+				{NINF, NINF, 40, NINF, NINF},
+				{NINF, NINF, NINF, NINF, NINF},
 		};
 		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
@@ -58,8 +60,7 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
-	public void testGetMaxBranching2() {
-		double ninf = Double.NEGATIVE_INFINITY;
+	public void testGetMaxSpanningTree2() {
 		/*
 		root    10
 		(0) -------> (1) <
@@ -73,11 +74,11 @@ public class ChuLiuEdmondsTest {
 		     40
 		 */
 		double[][] weights = {
-				{ ninf, 10, ninf, 10, ninf },
-				{ ninf, ninf, ninf, ninf, 10 },
-				{ ninf,  ninf, ninf,  35, ninf },
-				{ ninf, 20, 40, ninf, ninf },
-				{ ninf, 20, 50, ninf, ninf},
+				{NINF, 10, NINF, 10, NINF},
+				{NINF, NINF, NINF, NINF, 10 },
+				{NINF, NINF, NINF,  35, NINF},
+				{NINF, 20, 40, NINF, NINF},
+				{NINF, 20, 50, NINF, NINF},
 		};
 		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
@@ -103,5 +104,59 @@ public class ChuLiuEdmondsTest {
 		assertEquals(2, maxBranching.get(3).intValue());
 		assertEquals(1, maxBranching.get(4).intValue());
 		assertEquals(105.0, weightedSpanningTree.weight);
+	}
+
+	@Test
+	public void testGetDiverseKbestMaxSpanningTrees() {
+		/*
+		root    10
+		(0) -------> (1) <
+		 |     ---^   |  \
+		 |10  /        |10 \
+		 |   /20        \   \ 20
+		 |  /            \   \
+		 V /  35           V  |
+		(3)<----- (2) <----- (4)
+		  \-------^     50
+		     40
+		 */
+		double[][] weights = {
+				{NINF, 10, NINF, 10, NINF},
+				{NINF, NINF, NINF, NINF, 10 },
+				{NINF, NINF, NINF,  35, NINF},
+				{NINF, 20, 40, NINF, NINF},
+				{NINF, 20, 50, NINF, NINF},
+		};
+		final List<Weighted<Map<Integer, Integer>>> weightedSpanningTrees =
+				ChuLiuEdmonds.getDiverseKBestSpanningTrees(weights, 0, 2, 50.0);
+		// Print maximum branching per node.
+		System.out.println("Maximum branchings:");
+		Map<Integer, Integer> maxBranching = weightedSpanningTrees.get(0).val;
+		for (Weighted<Map<Integer, Integer>> weightedSpanningTree : weightedSpanningTrees) {
+			maxBranching = weightedSpanningTree.val;
+			for (int to = 1; to <= maxBranching.size(); ++to) {
+				System.out.println(maxBranching.get(to) + " -> " + to);
+			}
+			System.out.println(weightedSpanningTree.weight);
+		}
+		/*
+		root
+		(0)         (1)
+		 |     ---^   |
+		 |10  /        |-40
+		 |   /20        \
+		 |  /            \
+		 V /               V
+		(3)       (2)       (4)
+		  \-------^
+		     40
+		 */
+		maxBranching = weightedSpanningTrees.get(1).val;
+		assertEquals(3, maxBranching.get(1).intValue());
+		assertEquals(3, maxBranching.get(2).intValue());
+		assertEquals(0, maxBranching.get(3).intValue());
+		assertEquals(1, maxBranching.get(4).intValue());
+		assertEquals(30.0, weightedSpanningTrees.get(1).weight);
+
 	}
 }

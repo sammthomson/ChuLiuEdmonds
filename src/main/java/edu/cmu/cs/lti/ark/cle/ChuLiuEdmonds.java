@@ -33,7 +33,7 @@ public class ChuLiuEdmonds {
 		private final Partition<T> weaklyConnected;
 		// An invariant of the CLE algorithm is that each SCC always has at most one incoming edge.
 		private final Map<Component, Weighted<Edge<T>>> incomingEdgeByScc;
-		// running sum of weights. takes into account the fact that we have an extra edge for each cycle
+		// running sum of weights. takes into account the fact that we have an extra edge in each cycle
 		private double score;
 
 		public Subgraph(Collection<T> nodes) {
@@ -56,16 +56,17 @@ public class ChuLiuEdmonds {
 		}
 
 		/** Given an edge that completes a cycle, merge all SCCs on that cycle into one SCC. */
-		private Component merge(Weighted<Edge<T>> newEdge, Map<Component, PriorityQueue<Weighted<Edge<T>>>> unseenIncomingEdges) {
+		private Component merge(Weighted<Edge<T>> newEdge, Map<Component, Queue<Weighted<Edge<T>>>> unseenIncomingEdges) {
 			// Find edges connecting SCCs on the path from maxInEdge.destination to maxInEdge.source
 			final List<Weighted<Edge<T>>> cycle = getCycle(newEdge);
 			// get the minimum edge weight on the cycle (edges are naturally ordered max-first)
-			//final double minEdgeWeight = Collections.min(cycle, Ordering.natural().reverse()).getWeight(); // this is what the paper says, but doesn't make sense to me
+			//final double minEdgeWeight = Collections.min(cycle, Ordering.natural().reverse()).getWeight();
 			// Increment edge weights in each queue and then add them to the merged SCC queue.
-			final PriorityQueue<Weighted<Edge<T>>> mergedQueue = Queues.newPriorityQueue();
+			final Queue<Weighted<Edge<T>>> mergedQueue = Queues.newPriorityQueue();
 			for (Weighted<Edge<T>> currentEdge : cycle) {
-				//final double inc = minEdgeWeight - currentEdge.getWeight(); // this is what the paper says, but doesn't make sense and doesn't work
-				final double inc = -currentEdge.weight;
+				// this is what the paper says, but doesn't make sense and doesn't work
+				//final double inc = minEdgeWeight - currentEdge.getWeight();
+				final double inc = -currentEdge.weight; // this makes sense and works
 				final Component destination = stronglyConnected.componentOf(currentEdge.val.destination);
 				for (Weighted<Edge<T>> wEdge : unseenIncomingEdges.get(destination)) {
 					Edge<T> e = wEdge.val;
@@ -103,7 +104,7 @@ public class ChuLiuEdmonds {
 		 * Adds the given edge to this subgraph, merging SCCs if necessary
 		 * @return the new SCC, if adding edge created a cycle
 		 */
-		public Optional<Component> addEdge(Weighted<Edge<T>> wEdge, Map<Component, PriorityQueue<Weighted<Edge<T>>>> unseenIncomingEdges) {
+		public Optional<Component> addEdge(Weighted<Edge<T>> wEdge, Map<Component, Queue<Weighted<Edge<T>>>> unseenIncomingEdges) {
 			Edge<T> edge = wEdge.val;
 			edgesBySource.put(edge.source, edge);
 			score += wEdge.weight;
@@ -131,10 +132,10 @@ public class ChuLiuEdmonds {
 			final Map<T, T> parents = Maps.newHashMap();
 			// keep track of what we've seen, so we can throw out the last edge in each cycle
 			final Set<T> visited = Sets.newHashSetWithExpectedSize(numNodes);
-			final LinkedList<T> toDo = Lists.newLinkedList();
+			final Queue<T> toDo = Lists.newLinkedList();
 			toDo.add(root);
 			while(!toDo.isEmpty()) {
-				T node = toDo.pop();
+				T node = toDo.poll();
 				visited.add(node);
 				for (Edge<T> outEdge : edgesBySource.get(node)) {
 					if (!visited.contains(outEdge.destination)) {
@@ -151,23 +152,23 @@ public class ChuLiuEdmonds {
 	 * Find an optimal branching of the given graph, rooted in the given node.
 	 * This is the main entry point for the algorithm.
 	 */
-	public static Weighted<Map<Integer, Integer>> getMaxSpanningTree(double[][] originalGraph, int root) {
-		final int numNodes = originalGraph.length;
+	public static Weighted<Map<Integer, Integer>> getMaxSpanningTree(double[][] graph, int root) {
+		final int numNodes = graph.length;
 		List<Integer> nodes = Lists.newArrayListWithExpectedSize(numNodes);
 		for(int i = 0; i < numNodes; i++) nodes.add(i);
 		// result
 		final Subgraph<Integer> subgraph = new Subgraph<Integer>(nodes);
 
 		// a priority queue of incoming edges for each SCC.
-		final Map<Component, PriorityQueue<Weighted<Edge<Integer>>>> unseenIncomingEdges =
-				getEdgesByDestination(originalGraph, root, subgraph.stronglyConnected);
+		final Map<Component, Queue<Weighted<Edge<Integer>>>> unseenIncomingEdges =
+				getEdgesByDestination(graph, root, subgraph.stronglyConnected);
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
-		final LinkedList<Component> componentsWithNoInEdges =
+		final Queue<Component> componentsWithNoInEdges =
 				Lists.newLinkedList(subgraph.stronglyConnected.getAllComponents());
 
 		// Work our way through all components, in no particular order
 		while (!componentsWithNoInEdges.isEmpty()) {
-			final Component component = componentsWithNoInEdges.pop();
+			final Component component = componentsWithNoInEdges.poll();
 
 			// find maximum edge entering 'component' from the outside.
 			final Weighted<Edge<Integer>> maxInEdge =
@@ -186,17 +187,49 @@ public class ChuLiuEdmonds {
 	}
 
 	/**
+	 * Find the k best branchings of the given graph, rooted in the given node.
+	 * Induce diversity by penalizing results for sharing edges with previous results.
+	 *
+	 * @param originalGraph the graph to find branchings for
+	 * @param root which node the branchings must be rooted on
+	 * @param k number of best branchings to return
+	 * @param alpha the factor by which to penalize repeated edges
+	 * @return a list of the k best branchings, along with their scores
+	 */
+	public static List<Weighted<Map<Integer, Integer>>>
+			getDiverseKBestSpanningTrees(double[][] originalGraph, int root, int k, double alpha) {
+		final double[][] graph = copyGraph(originalGraph); // we're about to mutate this
+		List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayListWithExpectedSize(k);
+		for (int i = 0; i < k; i++) {
+			final Weighted<Map<Integer, Integer>> maxSpanningTree = getMaxSpanningTree(graph, root);
+			results.add(maxSpanningTree);
+			// penalize edges for appearing in a previous solution
+			for (int to : maxSpanningTree.val.keySet()) {
+				int from = maxSpanningTree.val.get(to);
+				graph[from][to] -= alpha;
+			}
+		}
+		return results;
+	}
+
+	private static double[][] copyGraph(double[][] originalGraph) {
+		final double[][] result = new double[originalGraph.length][];
+		for (int i = 0; i < originalGraph.length; i++) result[i] = originalGraph[i].clone();
+		return result;
+	}
+
+	/**
 	 * Groups edges by their destination component
 	 *
 	 * TODO: this is O(m^2 log(m)), need to use a specialized PriorityQueue to get down to O(m^2)
 	 */
-	private static Map<Component, PriorityQueue<Weighted<Edge<Integer>>>>
+	private static Map<Component, Queue<Weighted<Edge<Integer>>>>
 			getEdgesByDestination(double[][] originalGraph, Integer root, Partition<Integer> scc) {
 		final int numNodes = originalGraph.length;
-		final Map<Component, PriorityQueue<Weighted<Edge<Integer>>>> incomingEdges = Maps.newHashMapWithExpectedSize(numNodes);
+		final Map<Component, Queue<Weighted<Edge<Integer>>>> incomingEdges = Maps.newHashMapWithExpectedSize(numNodes);
 		for (int destinationNode = 0; destinationNode < numNodes; destinationNode++) {
 			// Create a priority queue of incoming edges for each SCC.
-			final PriorityQueue<Weighted<Edge<Integer>>> sccPriorityQueue = Queues.newPriorityQueue();
+			final Queue<Weighted<Edge<Integer>>> sccPriorityQueue = Queues.newPriorityQueue();
 			if(destinationNode != root) { // Throw out incoming edges for the root node.
 				for (int sourceNode = 0; sourceNode < numNodes; sourceNode++) {
 					if (sourceNode == destinationNode) continue; // Skip autocycle edges
