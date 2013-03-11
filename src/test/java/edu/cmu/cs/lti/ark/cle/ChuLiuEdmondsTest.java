@@ -60,54 +60,7 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
-	public void testGetMaxSpanningTree2() {
-		/*
-		root    10
-		(0) -------> (1) <
-		 |     ---^   |  \
-		 |10  /        |10 \
-		 |   /20        \   \ 20
-		 |  /            \   \
-		 V /  35           V  |
-		(3)<----- (2) <----- (4)
-		  \-------^     50
-		     40
-		 */
-		double[][] weights = {
-				{NINF, 10, NINF, 10, NINF},
-				{NINF, NINF, NINF, NINF, 10 },
-				{NINF, NINF, NINF,  35, NINF},
-				{NINF, 20, 40, NINF, NINF},
-				{NINF, 20, 50, NINF, NINF},
-		};
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
-		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
-				// Print maximum branching per node.
-		System.out.println("Maximum branching:");
-		for (int to = 1; to <= maxBranching.size(); ++to)
-			System.out.println(maxBranching.get(to) + " -> " + to);
-		System.out.println(weightedSpanningTree.weight);
-
-		/*
-		root    10
-		(0) -------> (1)
-		               |
-		               |10
-		                \
-		                 \
-		      35           V
-		(3)<----- (2) <----- (4)
-		                50
-		 */
-		assertEquals(0, maxBranching.get(1).intValue());
-		assertEquals(4, maxBranching.get(2).intValue());
-		assertEquals(2, maxBranching.get(3).intValue());
-		assertEquals(1, maxBranching.get(4).intValue());
-		assertEquals(105.0, weightedSpanningTree.weight);
-	}
-
-	@Test
-	public void testGetDiverseKbestMaxSpanningTrees() {
+	public void testGetDiverseKBestMaxSpanningTrees() {
 		/*
 		root    10
 		(0) -------> (1) <
@@ -140,10 +93,27 @@ public class ChuLiuEdmondsTest {
 			System.out.println(weightedSpanningTree.weight);
 		}
 		/*
+		root    10
+		(0) -------> (1)
+		               |
+		               |10
+		                \
+		                 \
+		      35           V
+		(3)<----- (2) <----- (4)
+		                50
+		 */
+		maxBranching = weightedSpanningTrees.get(0).val;
+		assertEquals(0, maxBranching.get(1).intValue());
+		assertEquals(4, maxBranching.get(2).intValue());
+		assertEquals(2, maxBranching.get(3).intValue());
+		assertEquals(1, maxBranching.get(4).intValue());
+		assertEquals(105.0, weightedSpanningTrees.get(0).weight);
+		/*
 		root
 		(0)         (1)
 		 |     ---^   |
-		 |10  /        |-40
+		 |10  /        |-40 (10 - 50)
 		 |   /20        \
 		 |  /            \
 		 V /               V
