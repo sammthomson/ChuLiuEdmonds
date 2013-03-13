@@ -1,8 +1,11 @@
 package edu.cmu.cs.lti.ark.cle;
 
 import com.google.common.collect.Lists;
+import com.google.common.primitives.Ints;
 
 import java.util.List;
+
+import static edu.cmu.cs.lti.ark.cle.PersistentArrayList.copyOf;
 
 /**
  * Implementation of a persistent Union-Find Data Structure.
@@ -17,9 +20,10 @@ import java.util.List;
  *
  * @author sthomson@cs.cmu.edu
  */
-public class PersistentPartition {
+public class PersistentPartition implements Comparable<PersistentPartition> {
 	private PersistentArrayList<Integer> parents;
 	private final PersistentArrayList<Integer> ranks;
+	private final int numUniqueComponents;
 
 	/**
 	 * Constructs a new partition of singletons
@@ -29,16 +33,20 @@ public class PersistentPartition {
 		final List<Integer> parents = Lists.newArrayListWithExpectedSize(n);
 		final List<Integer> ranks = Lists.newArrayListWithExpectedSize(n);
 		for(int i = 0; i < n; i++) {
-			parents.add(i);
-			ranks.add(0);
+			parents.add(i); // each node is its own head
+			ranks.add(0); // every node has depth 0 to start
 		}
-		this.parents = new PersistentArrayList<Integer>(parents);
-		this.ranks = new PersistentArrayList<Integer>(ranks);
+		this.parents = copyOf(parents);
+		this.ranks = copyOf(ranks);
+		this.numUniqueComponents = n;
 	}
 
-	private PersistentPartition(PersistentArrayList<Integer> parents, PersistentArrayList<Integer> ranks) {
+	private PersistentPartition(PersistentArrayList<Integer> parents,
+	                            PersistentArrayList<Integer> ranks,
+	                            int numUniqueComponents) {
 		this.parents = parents;
 		this.ranks = ranks;
+		this.numUniqueComponents = numUniqueComponents;
 	}
 
 	/** Find the representative for the given item */
@@ -51,7 +59,7 @@ public class PersistentPartition {
 
 	/** Helper function for componentOf */
 	private Pair<PersistentArrayList<Integer>, Integer> auxFind(int i) {
-		// walk upwards until you find the canonical Component (x is canonical iff x.parent == x)
+		// walk upwards until you find the canonical component (x is canonical iff x.parent == x)
 		// uses a recursive path compressing algorithm
 		final Integer parent = parents.get(i);
 		if (parent == i) {
@@ -69,20 +77,27 @@ public class PersistentPartition {
 		final int bHead = componentOf(b);
 		if(aHead == bHead) return this;
 		// add the shorter tree underneath the taller tree
+		final int n = numUniqueComponents - 1;
 		final int aRank = ranks.get(aHead);
 		final int bRank = ranks.get(bHead);
 		if (aRank > bRank) {
-			return new PersistentPartition(parents.set(bHead, aHead), ranks);
+			return new PersistentPartition(parents.set(bHead, aHead), ranks, n);
 		} else if (bRank > aRank) {
-			return new PersistentPartition(parents.set(aHead, bHead), ranks);
+			return new PersistentPartition(parents.set(aHead, bHead), ranks, n);
 		} else {
 			// whoops, the tree got taller
-			return new PersistentPartition(parents.set(bHead, aHead), ranks.set(aHead, aRank + 1));
+			return new PersistentPartition(parents.set(bHead, aHead), ranks.set(aHead, aRank + 1), n);
 		}
 	}
 
 	/** Determines whether the two items are in the same component or not */
 	public boolean sameComponent(int a, int b) {
 		return componentOf(a) == componentOf(b);
+	}
+
+	/** fewer components before more components */
+	@Override public int compareTo(PersistentPartition other) {
+		if (other == null) return -1;
+		return Ints.compare(numUniqueComponents, other.numUniqueComponents);
 	}
 }

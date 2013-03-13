@@ -3,6 +3,7 @@ package edu.cmu.cs.lti.ark.cle;
 import com.google.common.collect.Lists;
 import org.junit.Test;
 
+import static edu.cmu.cs.lti.ark.cle.PersistentArrayList.copyOf;
 import static junit.framework.Assert.assertEquals;
 
 /**
@@ -11,7 +12,7 @@ import static junit.framework.Assert.assertEquals;
 public class PersistentArrayListTest {
 	@Test
 	public void testPersistence() {
-		final PersistentArrayList<String> strings1 = new PersistentArrayList<String>(Lists.newArrayList("a", "b", "c"));
+		final PersistentArrayList<String> strings1 = copyOf(Lists.newArrayList("a", "b", "c"));
 		final PersistentArrayList<String> strings2 = strings1.set(1, "b2");
 		final PersistentArrayList<String> strings3 = strings1.set(2, "c3");
 		final PersistentArrayList<String> strings4 = strings3.set(0, "a4");

@@ -155,11 +155,11 @@ public class ChuLiuEdmondsTest {
 				{NINF, NINF, NINF, NINF, NINF, NINF, NINF, 9,    NINF, NINF, NINF}, // /        /            /
 				{NINF, NINF, NINF, 3   , NINF, NINF, NINF, NINF, NINF, NINF, NINF}, //                      /
 		};
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree =
-				ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		printTree(weightedSpanningTree);
 
 		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		assertEdgesSumToScore(weights, weightedSpanningTree);
 		assertEquals(3, maxBranching.get(1).intValue());
 		assertEquals(8, maxBranching.get(2).intValue());
 		assertEquals(2, maxBranching.get(3).intValue());
@@ -170,6 +170,5 @@ public class ChuLiuEdmondsTest {
 		assertEquals(0, maxBranching.get(8).intValue());
 		assertEquals(8, maxBranching.get(9).intValue());
 		assertEquals(8, maxBranching.get(10).intValue());
-		assertEdgesSumToScore(weights, weightedSpanningTree);
 	}
 }

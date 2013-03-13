@@ -10,7 +10,8 @@ import java.util.Iterator;
 import static com.google.common.base.Preconditions.checkElementIndex;
 
 /**
- * Implementation of a persistent list. I.e 'set(i, val)' returns a new PersistentArrayList,
+ * Implementation of a persistent list with fast random access.
+ * 'set(i, val)' returns a new PersistentArrayList,
  * leaving the original PersistentArrayList un(perceptably)changed.
  *
  * Based on "A Persistent Union-Find Data Structure" Conchon & Filliaˆtre, 2007
@@ -25,11 +26,11 @@ import static com.google.common.base.Preconditions.checkElementIndex;
  * @author sthomson@cs.cmu.edu
  */
 public class PersistentArrayList<T> extends AbstractCollection<T> {
-	// either an array or a diff chain based on an array
+	// either an array, or a diff chain hanging off an array
 	private Data<T> data;
 	private int size;
 
-	/** Private class to hold our data. Either an array, or a diff chain based on an array */
+	/** Private class to hold our data. Either an array, or a diff chain hanging off an array */
 	private static interface Data<T> {
 		public T get(int i);
 	}
@@ -66,13 +67,12 @@ public class PersistentArrayList<T> extends AbstractCollection<T> {
 	}
 
 	/** Creates a new PersistentArrayList with a copy of the given collection */
-	public PersistentArrayList(Collection<T> collection) {
-		final ArrayList<T> list = Lists.newArrayList(collection); // defensive copy
-		this.data = new ArrayData<T>(list);
-		this.size = list.size();
+	public static <T> PersistentArrayList<T> copyOf(Collection<T> collection) {
+		final ArrayList<T> list = Lists.newArrayList(collection);
+		return new PersistentArrayList<T>(new ArrayData<T>(list), list.size());
 	}
 
-	/** Gets the value stored at index i. Note that this triggers a reroot. */
+	/** Gets the value stored at index i */
 	public T get(int i) {
 		checkElementIndex(i, size);
 		return data.get(i);
@@ -81,20 +81,20 @@ public class PersistentArrayList<T> extends AbstractCollection<T> {
 	/**
 	 * Gets a PersistentArrayList which is the same as this, except it has 'val' at position 'i'.
 	 * The returned PersistentArrayList will be backed by an array, and this will be a diff pointing to it.
+	 * We do this under the assumption that the returned PersistentArrayList is more likely to be accessed
+	 * again in the future.
 	 * @param i the index to update
 	 * @param val the value to put at index 'i'
 	 * @return a new PersistentArrayList which is the same as this, except it has 'val' at position 'i'.
 	 */
 	public PersistentArrayList<T> set(int i, T val) {
 		checkElementIndex(i, size);
-		if (get(i) == val) return this;
-		reRoot();
-		final ArrayData<T> arrayData = (ArrayData<T>) data;
-		final T oldVal = arrayData.array.get(i);
-		arrayData.array.set(i, val);
-		final PersistentArrayList<T> newArrayList = new PersistentArrayList<T>(data, size);
-		data = new DiffData<T>(i, oldVal, newArrayList);
-		return newArrayList;
+		final PersistentArrayList<T> result =
+				(get(i) == val) ?
+						this :    // don't make a new diff if we don't need to
+						new PersistentArrayList<T>(new DiffData<T>(i, val, this), size);
+		result.reRoot(); // user is obviously interested in result, so make it efficient
+		return result;
 	}
 
 	@Override public int size() {
@@ -103,21 +103,23 @@ public class PersistentArrayList<T> extends AbstractCollection<T> {
 
 	/**
 	 * Reverses all of the diffs on our chain so that this.data becomes an ArrayData.
-	 * We do this to make the most recently accessed PersistentArrayList the most efficient,
-	 * under the assumption that it is more likely to be accessed again in the future.
-	 * Afterward, this.data is guaranteed to be of type ArrayData.
+	 * this then becomes the most efficient PersistentArrayList in the chain, as you don't
+	 * have to dereference any diffs.
 	 */
 	private void reRoot() {
 		if (data instanceof DiffData) {
 			// recursively reroot oldData
-			final DiffData<T> diffData = (DiffData<T>) data;
-			diffData.oldData.reRoot();
+			final DiffData<T> myDiff = (DiffData<T>) data;
+			final PersistentArrayList<T> oldData = myDiff.oldData;
+			oldData.reRoot();
 			// swap oldData with this, reversing the diff
-			final ArrayData<T> rootedArray = (ArrayData<T>) diffData.oldData.data;
-			final T oldVal = rootedArray.array.get(diffData.diffIdx);
-			rootedArray.array.set(diffData.diffIdx, diffData.diffVal);
-			diffData.oldData.data = new DiffData<T>(diffData.diffIdx, oldVal, this);
-			data = rootedArray;
+			final ArrayData<T> oldArray = (ArrayData<T>) oldData.data;
+			final T oldVal = oldArray.array.get(myDiff.diffIdx);
+			// update the array for our own use
+			oldArray.array.set(myDiff.diffIdx, myDiff.diffVal);
+			data = oldArray;
+			// make oldData a diff pointing at this
+			oldData.data = new DiffData<T>(myDiff.diffIdx, oldVal, this);
 		}
 	}
 
