@@ -113,9 +113,8 @@ public class ChuLiuEdmonds {
 		/**
 		 * Gets the optimal spanning tree, encoded as a map from each node to its parent.
 		 *
-		 * Since what we have is a bunch of cycles each with <= 1 incoming edge,
-		 * our strategy is to follow edges forward from the root, but throw out the
-		 * last edge in each cycle.
+		 * Each SCC can only have 1 edge entering it: the edge that we added most recently.
+		 * So we work backwards, adding edges unless they conflict with edges we've already added.
 		 */
 		private Weighted<Map<Integer, Integer>> getParentsMap() {
 			final Map<Integer, Integer> parents = Maps.newHashMap();
@@ -123,9 +122,7 @@ public class ChuLiuEdmonds {
 			// unpeel history, layer by layer
 			while (!sccHistory.isEmpty()) {
 				final PersistentPartition historicPartition = sccHistory.pop();
-				final Map<Integer, Weighted<Edge<Integer>>> incomingEdgeByScc =
-						incomingEdgeByHistoricScc.row(historicPartition);
-				for(Weighted<Edge<Integer>> edge : incomingEdgeByScc.values()) {
+				for(Weighted<Edge<Integer>> edge : incomingEdgeByHistoricScc.row(historicPartition).values()) {
 					parents.put(edge.val.destination, edge.val.source);
 					// for any SCC that this edge enters, it can be the only one
 					for (PersistentPartition histScc : sccHistory) {
