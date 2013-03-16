@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import org.junit.Test;
 
 import static edu.cmu.cs.lti.ark.cle.PersistentArrayList.copyOf;
-import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * @author sthomson@cs.cmu.edu

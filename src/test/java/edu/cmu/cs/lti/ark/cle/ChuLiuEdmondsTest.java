@@ -5,13 +5,14 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Map;
 
-import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * @author sthomson@cs.cmu.edu
  */
 public class ChuLiuEdmondsTest {
-	private double NINF = Double.NEGATIVE_INFINITY;
+	private final static double DELTA = 0.001;
+	private final static double NINF = Double.NEGATIVE_INFINITY;
 
 	private void assertEdgesSumToScore(double[][] originalEdgeWeights, Weighted<Map<Integer,Integer>> parentsMap) {
 		double sumOfWeights = 0.0;
@@ -19,7 +20,7 @@ public class ChuLiuEdmondsTest {
 			final int from = parentsMap.val.get(to);
 			sumOfWeights += originalEdgeWeights[from][to];
 		}
-		assertEquals(sumOfWeights, parentsMap.weight);
+		assertEquals(sumOfWeights, parentsMap.weight, 0.0001);
 	}
 
 	@Test
@@ -61,7 +62,7 @@ public class ChuLiuEdmondsTest {
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
 		assertEquals(2, maxBranching.get(4).intValue());
-		assertEquals(90.0, weightedSpanningTree.weight);
+		assertEquals(90.0, weightedSpanningTree.weight, DELTA);
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 	}
 
@@ -108,7 +109,7 @@ public class ChuLiuEdmondsTest {
 		assertEquals(4, maxBranching.get(2).intValue());
 		assertEquals(2, maxBranching.get(3).intValue());
 		assertEquals(1, maxBranching.get(4).intValue());
-		assertEquals(105.0, weightedSpanningTree.weight);
+		assertEquals(105.0, weightedSpanningTree.weight, DELTA);
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 		/*
 		root
@@ -127,7 +128,7 @@ public class ChuLiuEdmondsTest {
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
 		assertEquals(1, maxBranching.get(4).intValue());
-		assertEquals(30.0, weightedSpanningTrees.get(1).weight);
+		assertEquals(30.0, weightedSpanningTrees.get(1).weight, DELTA);
 
 	}
 

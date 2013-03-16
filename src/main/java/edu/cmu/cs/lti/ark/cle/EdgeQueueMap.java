@@ -1,12 +1,12 @@
 package edu.cmu.cs.lti.ark.cle;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sun.istack.internal.Nullable;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-
-import static edu.cmu.cs.lti.ark.cle.Weighted.weighted;
 
 /**
  * A set of queues optimized for keeping track of unprocessed Edges entering each component during the CLE algorithm.
@@ -20,7 +20,7 @@ import static edu.cmu.cs.lti.ark.cle.Weighted.weighted;
  * @author sthomson@cs.cmu.edu
  */
 class EdgeQueueMap {
-	PersistentPartition partition;
+	Partition partition;
 	public final Map<Integer, EdgeQueue> queueByDestination;
 
 	/**
@@ -30,63 +30,62 @@ class EdgeQueueMap {
 	 */
 	public class EdgeQueue {
 		private final int component;
-		public final Map<Integer, Weighted<Edge<Integer>>> edgesBySourceNode;
+		public final Map<Integer, ExclusiveEdge> edgesBySourceNode;
 
 		public EdgeQueue(int component) {
 			this.component = component;
 			this.edgesBySourceNode = Maps.newHashMap(); // Important: don't keep this sorted. need O(1) insert time
 		}
 
-		public void addEdge(Weighted<Edge<Integer>> wEdge) {
-			final Edge<Integer> edge = wEdge.val;
+		public void addEdge(Edge edge, double weight, List<Edge> replaces) {
 			// only add if source is external to SCC
 			if (partition.componentOf(edge.source) == component) return;
 			// only keep the best edge for each source node
 			if (!edgesBySourceNode.containsKey(edge.source)
-					|| wEdge.compareTo(edgesBySourceNode.get(edge.source)) < 0) {
-				edgesBySourceNode.put(edge.source, wEdge);
+					|| weight > edgesBySourceNode.get(edge.source).weight) {
+				edgesBySourceNode.put(edge.source, new ExclusiveEdge(edge, replaces, weight));
 			}
 		}
 
-		@Nullable public Weighted<Edge<Integer>> popBestEdge() {
-			final Weighted<Edge<Integer>> min = Collections.min(edgesBySourceNode.values());
+		@Nullable public ExclusiveEdge popBestEdge() {
+			final ExclusiveEdge min = Collections.min(edgesBySourceNode.values());
 			if (min == null) return null;
-			edgesBySourceNode.remove(min.val.source);
+			edgesBySourceNode.remove(min.edge.source);
 			return min;
 		}
 	}
 
-	EdgeQueueMap(PersistentPartition partition) {
+	EdgeQueueMap(Partition partition) {
 		this.partition = partition;
 		this.queueByDestination = Maps.newHashMap();
 	}
 
-	public void addEdge(Weighted<Edge<Integer>> wEdge) {
-		final Integer destination = partition.componentOf(wEdge.val.destination);
+	public void addEdge(Edge edge, double weight) {
+		final int destination = partition.componentOf(edge.destination);
 		if (!queueByDestination.containsKey(destination)) {
 			queueByDestination.put(destination, new EdgeQueue(destination));
 		}
-		queueByDestination.get(destination).addEdge(wEdge);
+		final List<Edge> replaces = Lists.newLinkedList();
+		queueByDestination.get(destination).addEdge(edge, weight, replaces);
 	}
 
-	@Nullable public Weighted<Edge<Integer>> popBestEdge(int component) {
+	@Nullable public ExclusiveEdge popBestEdge(int component) {
 		if (!queueByDestination.containsKey(component)) return null;
 		return queueByDestination.get(component).popBestEdge();
 	}
 
-	public EdgeQueue merge(int component, Iterable<Weighted<EdgeQueue>> queuesToMerge) {
+	public EdgeQueue merge(int component, Iterable<Pair<EdgeQueue, Weighted<Edge>>> queuesToMerge) {
 		EdgeQueue result = new EdgeQueue(component);
-		for (Weighted<EdgeQueue> q : queuesToMerge) {
-			for (Weighted<Edge<Integer>> wEdge : q.val.edgesBySourceNode.values()) {
-				result.addEdge(doOffset(wEdge, q.weight));
+		for (Pair<EdgeQueue, Weighted<Edge>> queueAndReplace : queuesToMerge) {
+			final EdgeQueue queue = queueAndReplace.first;
+			final Weighted<Edge> replace = queueAndReplace.second;
+			for (ExclusiveEdge wEdgeAndExcluded : queue.edgesBySourceNode.values()) {
+				final List<Edge> replaces = wEdgeAndExcluded.excluded;
+				replaces.add(replace.val);
+				result.addEdge(wEdgeAndExcluded.edge, wEdgeAndExcluded.weight - replace.weight, replaces);
 			}
 		}
 		queueByDestination.put(component, result);
 		return result;
-	}
-
-	/** Add offset to the weight of wEdge */
-	private Weighted<Edge<Integer>> doOffset(Weighted<Edge<Integer>> wEdge, double offset) {
-		return weighted(new Edge<Integer>(wEdge.val.source, wEdge.val.destination), wEdge.weight + offset);
 	}
 }

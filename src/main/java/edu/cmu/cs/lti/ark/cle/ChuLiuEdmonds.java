@@ -1,15 +1,12 @@
 package edu.cmu.cs.lti.ark.cle;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
-import com.google.common.collect.*;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
-import static com.google.common.collect.Iterables.any;
 import static edu.cmu.cs.lti.ark.cle.Weighted.weighted;
 
 /**
@@ -23,71 +20,88 @@ public class ChuLiuEdmonds {
 	/** Represents the subgraph that gets iteratively built up in the CLE algorithm. */
 	private static class Subgraph {
 		// Partition representing the strongly connected components (SCCs).
-		private PersistentPartition stronglyConnected;
+		private Partition stronglyConnected;
 		// Partition representing the weakly connected components (WCCs).
-		private PersistentPartition weaklyConnected;
+		private Partition weaklyConnected;
 		// An invariant of the CLE algorithm is that each SCC always has at most one incoming edge.
 		// You can think of these edges as implicitly defining a graph with SCCs as nodes.
-		private final Map<Integer, Weighted<Edge<Integer>>> incomingEdgeByCurrentScc;
-		// History of edges we've added. Needed to reconstruct the final tree.
-		// rows are a time-slice in history, columns are the SCC they enter, values are the edge
-		// PersistentPartitions share structure, and we use a sparse table implementation, so doesn't take up much space.
-		private final Table<PersistentPartition, Integer, Weighted<Edge<Integer>>> incomingEdgeByHistoricScc;
+		private final Map<Integer, Weighted<Edge>> incomingEdgeByScc;
+		// History of edges we've added, and for each, a list of edges it would exclude.
+		// More recently added edges get priority over less recently added edges when reconstructing the final tree.
+		private final LinkedList<ExclusiveEdge> edgesAndWhatTheyExclude;
+		// a priority queue of incoming edges for each SCC.
+		private final EdgeQueueMap unseenIncomingEdges;
 		// running sum of weights.
 		// edge weights are adjusted as we go to take into account the fact that we have an extra edge in each cycle
 		private double score;
 
-		public Subgraph(int numNodes) {
-			stronglyConnected = new PersistentPartition(numNodes);
-			weaklyConnected = new PersistentPartition(numNodes);
-			incomingEdgeByCurrentScc = Maps.newHashMap();
-			// keep rows sorted by natural ordering (partitions with fewest components (i.e. most recent) come first)
-			incomingEdgeByHistoricScc = TreeBasedTable.create();
+		public Subgraph(double[][] graph, Integer root) {
+			final int numNodes = graph.length;
+			stronglyConnected = new Partition(numNodes);
+			weaklyConnected = new Partition(numNodes);
+			incomingEdgeByScc = Maps.newHashMap();
+			edgesAndWhatTheyExclude = Lists.newLinkedList();
+			unseenIncomingEdges = getEdgesByDestination(graph, root);
 			score = 0.0;
+		}
+
+		/** Groups edges by their destination component. O(n^2) */
+		private EdgeQueueMap getEdgesByDestination(double[][] graph, Integer root) {
+			final EdgeQueueMap incomingEdges = new EdgeQueueMap(stronglyConnected);
+			for (int destinationNode = 0; destinationNode < graph.length; destinationNode++) {
+				if(destinationNode != root) { // Throw out incoming edges for the root node.
+					for (int sourceNode = 0; sourceNode < graph.length; sourceNode++) {
+						if (sourceNode == destinationNode) continue; // Skip autocycle edges
+						final double weight = graph[sourceNode][destinationNode];
+						if (weight != Double.NEGATIVE_INFINITY) {
+							incomingEdges.addEdge(new Edge(sourceNode, destinationNode), weight);
+						}
+					}
+				}
+			}
+			return incomingEdges;
 		}
 
 		/**
 		 * Given an edge that completes a cycle, merge all SCCs on that cycle into one SCC.
 		 * Returns the new component.
 		 */
-		private int merge(Weighted<Edge<Integer>> newEdge, EdgeQueueMap unseenIncomingEdges) {
+		private int merge(Weighted<Edge> newEdge, EdgeQueueMap unseenIncomingEdges) {
 			// Find edges connecting SCCs on the path from newEdge.destination to newEdge.source
-			final List<Weighted<Edge<Integer>>> cycle = getCycle(newEdge);
-			// build up list of queues that need to be merged, with their respective weight offsets
-			final List<Weighted<EdgeQueueMap.EdgeQueue>> queuesToMerge = Lists.newLinkedList();
-			for (Weighted<Edge<Integer>> currentEdge : cycle) {
+			final List<Weighted<Edge>> cycle = getCycle(newEdge);
+			// build up list of queues that need to be merged, with the edge they would exclude
+			final List<Pair<EdgeQueueMap.EdgeQueue, Weighted<Edge>>> queuesToMerge = Lists.newLinkedList();
+			for (Weighted<Edge> currentEdge : cycle) {
 				final int destination = stronglyConnected.componentOf(currentEdge.val.destination);
 				final EdgeQueueMap.EdgeQueue queue =
 						unseenIncomingEdges.queueByDestination.get(destination);
 				// if we choose an edge in queue, we'll have to throw out currentEdge at the end
 				// (each SCC can have only one incoming edge).
-				// so offset the weight of every edge in queue to reflect that
-				queuesToMerge.add(weighted(queue, -currentEdge.weight));
+				queuesToMerge.add(Pair.of(queue, currentEdge));
 				unseenIncomingEdges.queueByDestination.remove(destination);
 			}
 			// Merge all SCCs on the cycle into one
-			for (Weighted<Edge<Integer>> e : cycle) {
-				stronglyConnected = stronglyConnected.merge(e.val.source, e.val.destination);
+			for (Weighted<Edge> e : cycle) {
+				stronglyConnected.merge(e.val.source, e.val.destination);
 			}
 			int component = stronglyConnected.componentOf(newEdge.val.destination);
 			// merge the queues and put the merged queue back into our map under the new component
-			unseenIncomingEdges.partition = stronglyConnected;
 			unseenIncomingEdges.merge(component, queuesToMerge);
 			// keep our implicit graph of SCCs up to date:
 			// we just created a cycle, so all in-edges have sources inside the new component
 			// i.e. there is no edge with source outside component, and destination inside component
-			incomingEdgeByCurrentScc.remove(component);
-			return stronglyConnected.componentOf(component);
+			incomingEdgeByScc.remove(component);
+			return component;
 		}
 
 		/** Gets the cycle of edges between SCCs that newEdge creates */
-		private List<Weighted<Edge<Integer>>> getCycle(Weighted<Edge<Integer>> newEdge) {
-			final List<Weighted<Edge<Integer>>> cycle = Lists.newArrayList();
+		private List<Weighted<Edge>> getCycle(Weighted<Edge> newEdge) {
+			final List<Weighted<Edge>> cycle = Lists.newLinkedList();
 			// circle around backward in the implicit graph until you get back to where you started
-			Weighted<Edge<Integer>> edge = newEdge;
+			Weighted<Edge> edge = newEdge;
 			cycle.add(edge);
 			while (!stronglyConnected.sameComponent(edge.val.source, newEdge.val.destination)) {
-				edge = incomingEdgeByCurrentScc.get(stronglyConnected.componentOf(edge.val.source));
+				edge = incomingEdgeByScc.get(stronglyConnected.componentOf(edge.val.source));
 				cycle.add(edge);
 			}
 			return cycle;
@@ -97,15 +111,17 @@ public class ChuLiuEdmonds {
 		 * Adds the given edge to this subgraph, merging SCCs if necessary
 		 * @return the new SCC, if adding edge created a cycle
 		 */
-		public Optional<Integer> addEdge(Weighted<Edge<Integer>> wEdge, EdgeQueueMap unseenIncomingEdges) {
-			score += wEdge.weight;
-			final Edge<Integer> edge = wEdge.val;
+		public Optional<Integer> addEdge(ExclusiveEdge wEdgeAndExcludes) {
+			final Edge edge = wEdgeAndExcludes.edge;
+			final double weight = wEdgeAndExcludes.weight;
+			final Weighted<Edge> wEdge = weighted(edge, weight);
+			score += weight;
 			final int destinationScc = stronglyConnected.componentOf(edge.destination);
-			incomingEdgeByHistoricScc.put(stronglyConnected, destinationScc, wEdge);
-			incomingEdgeByCurrentScc.put(destinationScc, wEdge);
+			edgesAndWhatTheyExclude.addFirst(wEdgeAndExcludes);
+			incomingEdgeByScc.put(destinationScc, wEdge);
 			if (!weaklyConnected.sameComponent(edge.source, edge.destination)) {
 				// Edge connects two different WCCs. Including it won't create a new cycle
-				weaklyConnected = weaklyConnected.merge(edge.source, edge.destination);
+				weaklyConnected.merge(edge.source, edge.destination);
 				return Optional.absent();
 			} else {
 				// Edge is contained within one WCC. Including it will create a new cycle.
@@ -122,24 +138,21 @@ public class ChuLiuEdmonds {
 		 */
 		private Weighted<Map<Integer, Integer>> getParentsMap() {
 			final Map<Integer, Integer> parents = Maps.newHashMap();
-			// unpeel history, layer by layer
-			// start with the most recent (i.e. most merged / fewest components)
-			LinkedList<PersistentPartition> sccHistory = Lists.newLinkedList(incomingEdgeByHistoricScc.rowKeySet());
-			while (!sccHistory.isEmpty()) {
-				final PersistentPartition historicPartition = sccHistory.pollFirst();
-				for(final Weighted<Edge<Integer>> edge : incomingEdgeByHistoricScc.row(historicPartition).values()) {
-					// make sure we don't already have an edge coming into the same SCC
-					final Predicate<Integer> sameSccAsEdge = new Predicate<Integer>() {
-						@Override public boolean apply(Integer destination) {
-							return historicPartition.sameComponent(destination, edge.val.destination);
-						}
-					};
-					if (!any(parents.keySet(), sameSccAsEdge)) {
-						parents.put(edge.val.destination, edge.val.source);
-					}
+			final Set<Edge> excluded = Sets.newHashSet();
+			// start with the most recent
+			while (!edgesAndWhatTheyExclude.isEmpty()) {
+				final ExclusiveEdge edgeAndWhatItExcludes = edgesAndWhatTheyExclude.pollFirst();
+				final Edge edge = edgeAndWhatItExcludes.edge;
+				if(!excluded.contains(edge)) {
+					excluded.addAll(edgeAndWhatItExcludes.excluded);
+					parents.put(edge.destination, edge.source);
 				}
 			}
 			return weighted(parents, score);
+		}
+
+		public ExclusiveEdge popBestEdge(int component) {
+			return unseenIncomingEdges.popBestEdge(component);
 		}
 	}
 
@@ -149,24 +162,21 @@ public class ChuLiuEdmonds {
 	 */
 	public static Weighted<Map<Integer,Integer>> getMaxSpanningTree(double[][] graph, int root) {
 		final int numNodes = graph.length;
-		final List<Integer> nodes = Lists.newArrayListWithExpectedSize(numNodes);
-		for(int i = 0; i < numNodes; i++) nodes.add(i);
 		// result
-		final Subgraph subgraph = new Subgraph(numNodes);
+		final Subgraph subgraph = new Subgraph(graph, root);
 
-		// a priority queue of incoming edges for each SCC.
-		final EdgeQueueMap unseenIncomingEdges = getEdgesByDestination(graph, root, subgraph);
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
-		final Queue<Integer> componentsWithNoInEdges = Lists.newLinkedList(nodes);
+		final Queue<Integer> componentsWithNoInEdges = Lists.newLinkedList();
+		for(int i = 0; i < numNodes; i++) componentsWithNoInEdges.add(i);
 
 		// Work our way through all componentsWithNoInEdges, in no particular order
 		while (!componentsWithNoInEdges.isEmpty()) {
 			final int component = componentsWithNoInEdges.poll();
 			// find maximum edge entering 'component' from the outside.
-			final Weighted<Edge<Integer>> maxInEdge = unseenIncomingEdges.popBestEdge(component);
+			final ExclusiveEdge maxInEdge = subgraph.popBestEdge(component);
 			if (maxInEdge == null) continue; // No in-edges left to consider for this component. Done with it!
 			// add the new edge to subgraph, merging SCCs if necessary
-			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdge, unseenIncomingEdges);
+			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdge);
 			if (newComponent.isPresent()) {
 				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
 				componentsWithNoInEdges.add(newComponent.get());
@@ -203,21 +213,5 @@ public class ChuLiuEdmonds {
 			}
 		}
 		return results;
-	}
-
-	/** Groups edges by their destination component. O(n^2) */
-	private static EdgeQueueMap getEdgesByDestination(double[][] graph, Integer root, Subgraph subgraph) {
-		final EdgeQueueMap incomingEdges = new EdgeQueueMap(subgraph.stronglyConnected);
-		for (int destinationNode = 0; destinationNode < graph.length; destinationNode++) {
-			if(destinationNode != root) { // Throw out incoming edges for the root node.
-				for (int sourceNode = 0; sourceNode < graph.length; sourceNode++) {
-					if (sourceNode == destinationNode) continue; // Skip autocycle edges
-					final double weight = graph[sourceNode][destinationNode];
-					if (weight != Double.NEGATIVE_INFINITY)
-						incomingEdges.addEdge(weighted(new Edge<Integer>(sourceNode, destinationNode), weight));
-				}
-			}
-		}
-		return incomingEdges;
 	}
 }

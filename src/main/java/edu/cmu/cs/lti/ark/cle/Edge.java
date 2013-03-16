@@ -3,11 +3,11 @@ package edu.cmu.cs.lti.ark.cle;
 import com.google.common.base.Objects;
 
 /** An edge in a directed graph. */
-public class Edge<V> {
-	public final V source;
-	public final V destination;
+public class Edge {
+	public final int source;
+	public final int destination;
 
-	public Edge(V source, V destination) {
+	public Edge(int source, int destination) {
 		this.source = source;
 		this.destination = destination;
 	}
