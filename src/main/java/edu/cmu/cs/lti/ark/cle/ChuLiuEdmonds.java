@@ -185,33 +185,4 @@ public class ChuLiuEdmonds {
 		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
 		return subgraph.getParentsMap();
 	}
-
-	/**
-	 * Find the k best branchings of the given graph, rooted in the given node.
-	 * Induce diversity by penalizing results that share edges with previous results.
-	 *
-	 * @param originalGraph the graph to find branchings for
-	 * @param root which node the branchings must be rooted on
-	 * @param k number of best branchings to return
-	 * @param alpha the factor by which to penalize repeated edges
-	 * @return a list of the k best branchings, along with their scores
-	 */
-	public static List<Weighted<Map<Integer,Integer>>>
-			getDiverseKBestSpanningTrees(double[][] originalGraph, int root, int k, double alpha) {
-		// make a copy; we're about to mutate this
-		final double[][] graph = new double[originalGraph.length][];
-		for (int i = 0; i < originalGraph.length; i++) graph[i] = originalGraph[i].clone();
-
-		final List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayListWithExpectedSize(k);
-		for (int i = 0; i < k; i++) {
-			final Weighted<Map<Integer, Integer>> maxSpanningTree = getMaxSpanningTree(graph, root);
-			results.add(maxSpanningTree);
-			// penalize edges for appearing in a previous solution
-			for (int to : maxSpanningTree.val.keySet()) {
-				int from = maxSpanningTree.val.get(to);
-				graph[from][to] -= alpha;
-			}
-		}
-		return results;
-	}
 }
