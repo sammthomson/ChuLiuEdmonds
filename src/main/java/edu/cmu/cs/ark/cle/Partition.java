@@ -1,4 +1,4 @@
-package edu.cmu.cs.lti.ark.cle;
+package edu.cmu.cs.ark.cle;
 
 /**
  * Union-Find Data Structure
