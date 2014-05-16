@@ -1,9 +1,9 @@
-package edu.cmu.cs.lti.ark.cle;
+package edu.cmu.cs.ark.cle;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.sun.istack.internal.Nullable;
 
+import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +47,8 @@ class EdgeQueueMap {
 			}
 		}
 
-		@Nullable public ExclusiveEdge popBestEdge() {
+		@Nullable
+		public ExclusiveEdge popBestEdge() {
 			final ExclusiveEdge min = Collections.min(edgesBySourceNode.values());
 			if (min == null) return null;
 			edgesBySourceNode.remove(min.edge.source);

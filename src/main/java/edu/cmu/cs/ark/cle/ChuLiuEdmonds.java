@@ -1,4 +1,4 @@
-package edu.cmu.cs.lti.ark.cle;
+package edu.cmu.cs.ark.cle;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
@@ -7,7 +7,7 @@ import com.google.common.collect.Sets;
 
 import java.util.*;
 
-import static edu.cmu.cs.lti.ark.cle.Weighted.weighted;
+import static edu.cmu.cs.ark.cle.Weighted.weighted;
 
 /**
  * Chu-Liu-Edmonds' algorithm for finding a maximum branching in a complete, directed graph in O(n^2) time.
