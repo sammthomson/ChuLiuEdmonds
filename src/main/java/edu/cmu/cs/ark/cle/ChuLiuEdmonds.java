@@ -3,10 +3,14 @@ package edu.cmu.cs.ark.cle;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.*;
+import com.google.common.primitives.Doubles;
 
 import java.util.*;
 
+import static com.google.common.collect.ImmutableList.copyOf;
+import static com.google.common.collect.Iterables.concat;
 import static edu.cmu.cs.ark.cle.Weighted.weighted;
+import static java.util.Collections.singleton;
 
 /**
  * Chu-Liu-Edmonds' algorithm for finding a maximum branching in a complete, directed graph in O(n^2) time.
@@ -171,17 +175,12 @@ public class ChuLiuEdmonds {
 			return weighted(parents, score);
 		}
 
-		public ExclusiveEdge popBestEdge(int component) {
-			return unseenIncomingEdges.popBestEdge(component);
+		public Optional<ExclusiveEdge> popBestEdge(int component) {
+			return popBestEdge(component, Maps.<Integer, Integer>newHashMap());
 		}
 
-		public List<ExclusiveEdge> peekBestEdges(int component) {
-			return unseenIncomingEdges.peekBestEdges(component);
-		}
-
-		// TODO TODO
-		private ExclusiveEdge seek(ExclusiveEdge maxInEdge) {
-			return null;
+		public Optional<ExclusiveEdge> popBestEdge(int component, Map<Integer, Integer> best) {
+			return unseenIncomingEdges.popBestEdge(component, best);
 		}
 	}
 
@@ -207,8 +206,9 @@ public class ChuLiuEdmonds {
 		while (!componentsWithNoInEdges.isEmpty()) {
 			final int component = componentsWithNoInEdges.poll();
 			// find maximum edge entering 'component' from the outside.
-			final ExclusiveEdge maxInEdge = subgraph.popBestEdge(component);
-			if (maxInEdge == null) continue; // No in-edges left to consider for this component. Done with it!
+			final Optional<ExclusiveEdge> oMaxInEdge = subgraph.popBestEdge(component);
+			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
+			final ExclusiveEdge maxInEdge = oMaxInEdge.get();
 			// add the new edge to subgraph, merging SCCs if necessary
 			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdge);
 			if (newComponent.isPresent()) {
@@ -221,8 +221,11 @@ public class ChuLiuEdmonds {
 	}
 
 	/** Corresponds to the NEXT function in Camerini et al. 1980 */
-	public static Pair<Edge, Double> next(double[][] graph, int root, List<Edge> required, List<Edge> banned,  Weighted<Map<Integer,Integer>> best) {
-
+	public static Optional<Pair<Edge, Double>> next(double[][] graph,
+													int root,
+													List<Edge> required,
+													List<Edge> banned,
+													Weighted<Map<Integer,Integer>> best) {
 		final int numNodes = graph.length;
 		// result
 		final Subgraph subgraph = new Subgraph(graph, root, required, banned);
@@ -232,33 +235,72 @@ public class ChuLiuEdmonds {
 		for(int i = 0; i < numNodes; i++) componentsWithNoInEdges.add(i);
 
 		double bestDifference = Double.POSITIVE_INFINITY;
-		Optional<ExclusiveEdge> bestAlternativeEdge = Optional.absent();
+		Optional<ExclusiveEdge> bestEdgeToKickOut = Optional.absent();
 
 		// Work our way through all componentsWithNoInEdges, in no particular order
 		while (!componentsWithNoInEdges.isEmpty()) {
 			final int component = componentsWithNoInEdges.poll();
 			// find maximum edge entering 'component' from the outside.
-			final List<ExclusiveEdge> maxInEdges = subgraph.peekBestEdges(component);
 			// break ties in favor of edges in best
+			final Optional<ExclusiveEdge> oMaxInEdge = subgraph.popBestEdge(component, best.val);
+			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
+			final ExclusiveEdge maxInEdge = oMaxInEdge.get();
+			if (best.val.get(maxInEdge.edge.destination) == maxInEdge.edge.source && !required.contains(maxInEdge.edge)) {
 
-			if (best.val.get(maxInEdges.edge.destination) == maxInEdges.edge.source && !required.contains(maxInEdges.edge)) {
-				final ExclusiveEdge alternativeEdge = subgraph.seek(maxInEdges);
-				final double difference = maxInEdges.weight - alternativeEdge.weight;
-				if (difference < bestDifference) {
-					bestDifference = difference;
-					bestAlternativeEdge = Optional.of(alternativeEdge);
+				// TODO: left off here
+				final Optional<ExclusiveEdge> oAlternativeEdge =
+						seek(maxInEdge, best.val, subgraph.unseenIncomingEdges.queueByDestination.get(component));
+				if (oAlternativeEdge.isPresent()) {
+					final ExclusiveEdge alternativeEdge = oAlternativeEdge.get();
+					final double difference = maxInEdge.weight - alternativeEdge.weight;
+					if (difference < bestDifference) {
+						bestDifference = difference;
+						bestEdgeToKickOut = Optional.of(maxInEdge);
+					}
 				}
 			}
-			if (maxInEdges == null) continue; // No in-edges left to consider for this component. Done with it!
 			// add the new edge to subgraph, merging SCCs if necessary
-			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdges);
+			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdge);
 			if (newComponent.isPresent()) {
 				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
 				componentsWithNoInEdges.add(newComponent.get());
 			}
 		}
 		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
-		return subgraph.getParentsMap();
+		if (bestEdgeToKickOut.isPresent()) {
+			return Optional.of(Pair.of(bestEdgeToKickOut.get().edge, bestDifference));
+		} else {
+			return Optional.absent();
+		}
+	}
+
+	/** Determines whether potentialAncestor is an ancestor of node in bestArborescence */
+	private static boolean isAncestor(int node, int potentialAncestor, Map<Integer, Integer> bestArborescence) {
+		int currentNode = node;
+		while (bestArborescence.containsKey(currentNode)) {
+			currentNode = bestArborescence.get(currentNode);
+			if (currentNode == potentialAncestor) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Finds nextBestEdge, the next best alternative to maxInEdge for which the tail of
+	 * maxInEdge is not an ancestor of the source of nextBestEdge in bestArborescence
+	 */
+	public static Optional<ExclusiveEdge>
+			seek(ExclusiveEdge maxInEdge, Map<Integer, Integer> bestArborescence, EdgeQueueMap.EdgeQueue edgeQueue) {
+		Optional<ExclusiveEdge> oNextBestEdge = edgeQueue.popBestEdge();
+		while (oNextBestEdge.isPresent()) {
+			final ExclusiveEdge nextBestEdge = oNextBestEdge.get();
+			if (!isAncestor(nextBestEdge.edge.source, maxInEdge.edge.destination, bestArborescence)) {
+				edgeQueue.addEdge(nextBestEdge.edge, nextBestEdge.weight, nextBestEdge.excluded);
+				return oNextBestEdge;
+			} else {
+				oNextBestEdge = edgeQueue.popBestEdge();
+			}
+		}
+		return Optional.absent();
 	}
 
 	/**
@@ -290,7 +332,83 @@ public class ChuLiuEdmonds {
 		return results;
 	}
 
+	private static class ElementOfPartitionOfSolutions implements Comparable<ElementOfPartitionOfSolutions> {
+		final double weight;
+		final Edge edgeToKickOut;
+		final Weighted<Map<Integer, Integer>> currentBest;
+		final List<Edge> required;
+		final List<Edge> banned;
+
+		public ElementOfPartitionOfSolutions(double weight, Edge edgeToKickOut, Weighted<Map<Integer, Integer>> currentBest, List<Edge> required, List<Edge> banned) {
+			this.weight = weight;
+			this.edgeToKickOut = edgeToKickOut;
+			this.currentBest = currentBest;
+			this.required = required;
+			this.banned = banned;
+		}
+
+		@Override
+		public int compareTo(ElementOfPartitionOfSolutions other) {
+			return Doubles.compare(weight, other.weight);
+		}
+	}
+
 	public static List<Weighted<Map<Integer, Integer>>> getKBestSpanningTrees(double[][] weights, int root, int k) {
-		return null;
+		final List<Edge> initialRequired = ImmutableList.of();
+		final List<Edge> initialBanned = ImmutableList.of();
+		final PriorityQueue<ElementOfPartitionOfSolutions> queue =
+				new PriorityQueue<ElementOfPartitionOfSolutions>(3 * k, Collections.reverseOrder());  // want to pop max
+		final List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayList();
+		// 1-best
+		final Weighted<Map<Integer, Integer>> best = getMaxSpanningTree(weights, root);
+		results.add(best);
+		Optional<Pair<Edge, Double>> oEdgeToKickOutAndDiff = next(weights, root, initialRequired, initialBanned, best);
+		if (oEdgeToKickOutAndDiff.isPresent()) {
+			Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
+			final Edge edge = edgeToKickOutAndDiff.first;
+			Double diff = edgeToKickOutAndDiff.second;
+			queue.add(new ElementOfPartitionOfSolutions(
+					best.weight - diff,
+					edge,
+					best,
+					initialRequired,
+					initialBanned
+			));
+		}
+		for (int j = 1; j < k && !queue.isEmpty(); j++) {
+			final ElementOfPartitionOfSolutions element = queue.poll();
+			Edge edgeToKickOut = element.edgeToKickOut;
+			final List<Edge> newRequired = copyOf(concat(element.required, singleton(edgeToKickOut)));
+			final ImmutableList<Edge> newBanned = copyOf(concat(element.banned, singleton(edgeToKickOut)));
+			final Weighted<Map<Integer, Integer>> jthBest = getMaxSpanningTree(weights, root, element.required, newBanned);
+			results.add(jthBest);
+			oEdgeToKickOutAndDiff = next(weights, root, newRequired, element.banned, element.currentBest);
+			if (oEdgeToKickOutAndDiff.isPresent()) {
+				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
+				final double diff = edgeToKickOutAndDiff.second;
+				edgeToKickOut = edgeToKickOutAndDiff.first;
+				queue.add(new ElementOfPartitionOfSolutions(
+						element.currentBest.weight - diff,
+						edgeToKickOut,
+						element.currentBest,
+						newRequired,
+						element.banned
+				));
+			}
+			oEdgeToKickOutAndDiff = next(weights, root, element.required, newBanned, jthBest);
+			if (oEdgeToKickOutAndDiff.isPresent()) {
+				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
+				final double diff = edgeToKickOutAndDiff.second;
+				edgeToKickOut = edgeToKickOutAndDiff.first;
+				queue.add(new ElementOfPartitionOfSolutions(
+						element.weight - diff,
+						edgeToKickOut,
+						jthBest,
+						element.required,
+						newBanned
+				));
+			}
+		}
+		return results;
 	}
 }
