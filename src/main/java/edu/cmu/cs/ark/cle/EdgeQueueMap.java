@@ -4,7 +4,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -48,12 +49,37 @@ class EdgeQueueMap {
 		}
 
 		@Nullable
-		public ExclusiveEdge popBestEdge() {
-			final ExclusiveEdge min = Collections.min(edgesBySourceNode.values());
-			if (min == null) return null;
-			edgesBySourceNode.remove(min.edge.source);
-			return min;
+		public ExclusiveEdge popBestEdges() {
+			final List<ExclusiveEdge> best = max(edgesBySourceNode.values());
+			if (best.isEmpty()) return null;
+			edgesBySourceNode.remove(best.get(0).edge.source);
+			return best.get(0);
 		}
+
+		public List<ExclusiveEdge> peekBestEdges() {
+			return max(edgesBySourceNode.values());
+		}
+	}
+
+	public static <T extends Object & Comparable<? super T>> List<T> max(Collection<? extends T> coll) {
+		final Iterator<? extends T> i = coll.iterator();
+		List<T> candidates = Lists.newArrayList();
+
+		while (i.hasNext()) {
+			T next = i.next();
+			if (candidates.isEmpty()) {
+				candidates.add(next);
+			} else {
+				final int cmp = next.compareTo(candidates.get(0));
+				if (cmp == 0) {
+					candidates.add(next);
+				} else if (cmp > 0) {
+					candidates = Lists.newArrayList();
+					candidates.add(next);
+				}
+			}
+		}
+		return candidates;
 	}
 
 	EdgeQueueMap(Partition partition) {
@@ -72,7 +98,12 @@ class EdgeQueueMap {
 
 	@Nullable public ExclusiveEdge popBestEdge(int component) {
 		if (!queueByDestination.containsKey(component)) return null;
-		return queueByDestination.get(component).popBestEdge();
+		return queueByDestination.get(component).popBestEdges();
+	}
+
+	public List<ExclusiveEdge> peekBestEdges(int component) {
+		if (!queueByDestination.containsKey(component)) return Lists.newArrayList();
+		return queueByDestination.get(component).peekBestEdges();
 	}
 
 	public EdgeQueue merge(int component, Iterable<Pair<EdgeQueue, Weighted<Edge>>> queuesToMerge) {

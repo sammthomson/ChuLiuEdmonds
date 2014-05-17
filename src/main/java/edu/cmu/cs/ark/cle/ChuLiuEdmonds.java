@@ -1,9 +1,8 @@
 package edu.cmu.cs.ark.cle;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.*;
 
 import java.util.*;
 
@@ -17,6 +16,12 @@ import static edu.cmu.cs.ark.cle.Weighted.weighted;
  * @author sthomson@cs.cmu.edu
  */
 public class ChuLiuEdmonds {
+	private static Function<Edge, Integer> getDestination = new Function<Edge, Integer>() {
+		@Override public Integer apply(Edge input) {
+			return input.destination;
+		}
+	};
+
 	/** Represents the subgraph that gets iteratively built up in the CLE algorithm. */
 	private static class Subgraph {
 		// Partition representing the strongly connected components (SCCs).
@@ -36,22 +41,37 @@ public class ChuLiuEdmonds {
 		private double score;
 
 		public Subgraph(double[][] graph, Integer root) {
+			this(graph, root, ImmutableList.<Edge>of(), ImmutableList.<Edge>of());
+		}
+
+		public Subgraph(double[][] graph, Integer root, List<Edge> required, List<Edge> banned) {
 			final int numNodes = graph.length;
 			stronglyConnected = new Partition(numNodes);
 			weaklyConnected = new Partition(numNodes);
 			incomingEdgeByScc = Maps.newHashMap();
 			edgesAndWhatTheyExclude = Lists.newLinkedList();
-			unseenIncomingEdges = getEdgesByDestination(graph, root);
+			unseenIncomingEdges = getEdgesByDestination(graph, root, required, banned);
 			score = 0.0;
 		}
 
 		/** Groups edges by their destination component. O(n^2) */
-		private EdgeQueueMap getEdgesByDestination(double[][] graph, Integer root) {
+		private EdgeQueueMap getEdgesByDestination(double[][] graph, Integer root, List<Edge> required, List<Edge> banned) {
+			final ImmutableListMultimap<Integer, Edge> requiredByDestination = Multimaps.index(required, getDestination);
 			final EdgeQueueMap incomingEdges = new EdgeQueueMap(stronglyConnected);
 			for (int destinationNode = 0; destinationNode < graph.length; destinationNode++) {
 				if(destinationNode != root) { // Throw out incoming edges for the root node.
+					final ImmutableList<Edge> requiredEdgesForDest = requiredByDestination.get(destinationNode);
+					final Optional<Integer> requiredDest = requiredEdgesForDest.isEmpty() ? Optional.<Integer>absent() : Optional.of(requiredEdgesForDest.get(0).source);
 					for (int sourceNode = 0; sourceNode < graph.length; sourceNode++) {
 						if (sourceNode == destinationNode) continue; // Skip autocycle edges
+						if (requiredDest.isPresent() && sourceNode != requiredDest.get()) {
+							// Skip any edge that might compete with a required edge
+							continue;
+						}
+						if (banned.contains(new Edge(sourceNode, destinationNode))) {
+							// Skip banned edges
+							continue;
+						}
 						final double weight = graph[sourceNode][destinationNode];
 						if (weight != Double.NEGATIVE_INFINITY) {
 							incomingEdges.addEdge(new Edge(sourceNode, destinationNode), weight);
@@ -154,6 +174,15 @@ public class ChuLiuEdmonds {
 		public ExclusiveEdge popBestEdge(int component) {
 			return unseenIncomingEdges.popBestEdge(component);
 		}
+
+		public List<ExclusiveEdge> peekBestEdges(int component) {
+			return unseenIncomingEdges.peekBestEdges(component);
+		}
+
+		// TODO TODO
+		private ExclusiveEdge seek(ExclusiveEdge maxInEdge) {
+			return null;
+		}
 	}
 
 	/**
@@ -161,9 +190,14 @@ public class ChuLiuEdmonds {
 	 * This is the main entry point for the algorithm.
 	 */
 	public static Weighted<Map<Integer,Integer>> getMaxSpanningTree(double[][] graph, int root) {
+		return getMaxSpanningTree(graph, root, ImmutableList.<Edge>of(), ImmutableList.<Edge>of());
+	}
+
+	public static Weighted<Map<Integer,Integer>>
+			getMaxSpanningTree(double[][] graph, int root, List<Edge> required, List<Edge> banned) {
 		final int numNodes = graph.length;
 		// result
-		final Subgraph subgraph = new Subgraph(graph, root);
+		final Subgraph subgraph = new Subgraph(graph, root, required, banned);
 
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
 		final Queue<Integer> componentsWithNoInEdges = Lists.newLinkedList();
@@ -177,6 +211,47 @@ public class ChuLiuEdmonds {
 			if (maxInEdge == null) continue; // No in-edges left to consider for this component. Done with it!
 			// add the new edge to subgraph, merging SCCs if necessary
 			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdge);
+			if (newComponent.isPresent()) {
+				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
+				componentsWithNoInEdges.add(newComponent.get());
+			}
+		}
+		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
+		return subgraph.getParentsMap();
+	}
+
+	/** Corresponds to the NEXT function in Camerini et al. 1980 */
+	public static Pair<Edge, Double> next(double[][] graph, int root, List<Edge> required, List<Edge> banned,  Weighted<Map<Integer,Integer>> best) {
+
+		final int numNodes = graph.length;
+		// result
+		final Subgraph subgraph = new Subgraph(graph, root, required, banned);
+
+		// In the beginning, subgraph has no edges, so no SCC has in-edges.
+		final Queue<Integer> componentsWithNoInEdges = Lists.newLinkedList();
+		for(int i = 0; i < numNodes; i++) componentsWithNoInEdges.add(i);
+
+		double bestDifference = Double.POSITIVE_INFINITY;
+		Optional<ExclusiveEdge> bestAlternativeEdge = Optional.absent();
+
+		// Work our way through all componentsWithNoInEdges, in no particular order
+		while (!componentsWithNoInEdges.isEmpty()) {
+			final int component = componentsWithNoInEdges.poll();
+			// find maximum edge entering 'component' from the outside.
+			final List<ExclusiveEdge> maxInEdges = subgraph.peekBestEdges(component);
+			// break ties in favor of edges in best
+
+			if (best.val.get(maxInEdges.edge.destination) == maxInEdges.edge.source && !required.contains(maxInEdges.edge)) {
+				final ExclusiveEdge alternativeEdge = subgraph.seek(maxInEdges);
+				final double difference = maxInEdges.weight - alternativeEdge.weight;
+				if (difference < bestDifference) {
+					bestDifference = difference;
+					bestAlternativeEdge = Optional.of(alternativeEdge);
+				}
+			}
+			if (maxInEdges == null) continue; // No in-edges left to consider for this component. Done with it!
+			// add the new edge to subgraph, merging SCCs if necessary
+			final Optional<Integer> newComponent = subgraph.addEdge(maxInEdges);
 			if (newComponent.isPresent()) {
 				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
 				componentsWithNoInEdges.add(newComponent.get());
@@ -213,5 +288,9 @@ public class ChuLiuEdmonds {
 			}
 		}
 		return results;
+	}
+
+	public static List<Weighted<Map<Integer, Integer>>> getKBestSpanningTrees(double[][] weights, int root, int k) {
+		return null;
 	}
 }

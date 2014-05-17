@@ -1,5 +1,6 @@
 package edu.cmu.cs.ark.cle;
 
+import com.google.common.collect.ImmutableList;
 import org.junit.Test;
 
 import java.util.List;
@@ -64,6 +65,88 @@ public class ChuLiuEdmondsTest {
 		assertEquals(2, maxBranching.get(4).intValue());
 		assertEquals(90.0, weightedSpanningTree.weight, DELTA);
 		assertEdgesSumToScore(weights, weightedSpanningTree);
+	}
+
+	@Test
+	public void testGetKBest() {
+		double[][] weights = {
+				{NINF, 5, 1, 1},
+				{NINF, NINF, 11, 4},
+				{NINF,  10, NINF,  5},
+				{NINF, 9, 8, NINF},
+		};
+
+		final List<Weighted<Map<Integer, Integer>>> weightedSpanningTrees =
+				ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, 4);
+
+		final Weighted<Map<Integer, Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
+		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		assertEquals(0, maxBranching.get(1).intValue());
+		assertEquals(1, maxBranching.get(2).intValue());
+		assertEquals(2, maxBranching.get(3).intValue());
+		assertEquals(21.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+
+		maxBranching = weightedSpanningTrees.get(1).val;
+		assertEquals(3, maxBranching.get(1).intValue());
+		assertEquals(1, maxBranching.get(2).intValue());
+		assertEquals(0, maxBranching.get(3).intValue());
+		assertEquals(21.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+
+		maxBranching = weightedSpanningTrees.get(2).val;
+		assertEquals(0, maxBranching.get(1).intValue());
+		assertEquals(1, maxBranching.get(2).intValue());
+		assertEquals(1, maxBranching.get(3).intValue());
+		assertEquals(20.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+
+		maxBranching = weightedSpanningTrees.get(3).val;
+		assertEquals(2, maxBranching.get(1).intValue());
+		assertEquals(3, maxBranching.get(2).intValue());
+		assertEquals(0, maxBranching.get(3).intValue());
+		assertEquals(19.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+	}
+
+	@Test
+	public void testRequiredAndBannedEdges() {
+		double[][] weights = {
+				{NINF, 5, 1, 1},
+				{NINF, NINF, 11, 4},
+				{NINF,  10, NINF,  5},
+				{NINF, 9, 8, NINF},
+		};
+
+		final Weighted<Map<Integer, Integer>> weightedSpanningTree =
+				ChuLiuEdmonds.getMaxSpanningTree(weights, 0, ImmutableList.of(new Edge(0, 1)), ImmutableList.of(new Edge(2, 3)));
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		assertEquals(0, maxBranching.get(1).intValue());
+		assertEquals(1, maxBranching.get(2).intValue());
+		assertEquals(1, maxBranching.get(3).intValue());
+		assertEquals(20.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+
+	}
+
+	@Test
+	public void testRequiredAndBannedEdges2() {
+		double[][] weights = {
+				{NINF, 5, 1, 1},
+				{NINF, NINF, 11, 4},
+				{NINF,  10, NINF,  5},
+				{NINF, 9, 8, NINF},
+		};
+
+		final Weighted<Map<Integer, Integer>> weightedSpanningTree =
+				ChuLiuEdmonds.getMaxSpanningTree(weights, 0, ImmutableList.of(new Edge(0, 3), new Edge(3, 1)), ImmutableList.of(new Edge(1, 2)));
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		assertEquals(3, maxBranching.get(1).intValue());
+		assertEquals(3, maxBranching.get(2).intValue());
+		assertEquals(0, maxBranching.get(3).intValue());
+		assertEquals(18.0, weightedSpanningTree.weight, DELTA);
+		assertEdgesSumToScore(weights, weightedSpanningTree);
+
 	}
 
 	@Test
