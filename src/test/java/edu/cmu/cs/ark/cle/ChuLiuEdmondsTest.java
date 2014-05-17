@@ -141,8 +141,8 @@ public class ChuLiuEdmondsTest {
 		final Weighted<Map<Integer, Integer>> bestArborescence = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		final ExclusiveEdge maxInEdge = new ExclusiveEdge(new Edge(1, 2), ImmutableList.<Edge>of(), 11.0);
 		final EdgeQueueMap.EdgeQueue edgeQueue = new EdgeQueueMap.EdgeQueue(maxInEdge.edge.destination, new Partition(4));
-		edgeQueue.addEdge(new Edge(0, 2), 1.0, ImmutableList.<Edge>of());
-		edgeQueue.addEdge(new Edge(3, 2), 8.0, ImmutableList.<Edge>of());
+		edgeQueue.addEdge(new ExclusiveEdge(new Edge(0, 2), ImmutableList.<Edge>of(), 1.0));
+		edgeQueue.addEdge(new ExclusiveEdge(new Edge(3, 2), ImmutableList.<Edge>of(), 8.0));
 		final Optional<ExclusiveEdge> nextBestEdge = ChuLiuEdmonds.seek(maxInEdge, bestArborescence.val, edgeQueue);
 		assertTrue(nextBestEdge.isPresent());
 		// 3 -> 2 is an ancestor in bestArborescence, so seek should not return it
@@ -159,8 +159,8 @@ public class ChuLiuEdmondsTest {
 		);
 		final ExclusiveEdge maxInEdge = new ExclusiveEdge(new Edge(2, 1), ImmutableList.<Edge>of(), 10.0);
 		final EdgeQueueMap.EdgeQueue edgeQueue = new EdgeQueueMap.EdgeQueue(maxInEdge.edge.destination, new Partition(4));
-		edgeQueue.addEdge(new Edge(0, 1), 5.0, ImmutableList.<Edge>of());
-		edgeQueue.addEdge(new Edge(3, 1), 9.0, ImmutableList.<Edge>of());
+		edgeQueue.addEdge(new ExclusiveEdge(new Edge(0, 1), ImmutableList.<Edge>of(), 5.0));
+		edgeQueue.addEdge(new ExclusiveEdge(new Edge(3, 1), ImmutableList.<Edge>of(), 9.0));
 		final Optional<ExclusiveEdge> nextBestEdge = ChuLiuEdmonds.seek(maxInEdge, best, edgeQueue);
 		assertTrue(nextBestEdge.isPresent());
 		assertEquals(new Edge(3, 1), nextBestEdge.get().edge);

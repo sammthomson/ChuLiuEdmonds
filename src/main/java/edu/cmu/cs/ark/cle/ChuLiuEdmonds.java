@@ -246,8 +246,6 @@ public class ChuLiuEdmonds {
 			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
 			final ExclusiveEdge maxInEdge = oMaxInEdge.get();
 			if (best.val.get(maxInEdge.edge.destination) == maxInEdge.edge.source && !required.contains(maxInEdge.edge)) {
-
-				// TODO: left off here
 				final Optional<ExclusiveEdge> oAlternativeEdge =
 						seek(maxInEdge, best.val, subgraph.unseenIncomingEdges.queueByDestination.get(component));
 				if (oAlternativeEdge.isPresent()) {
@@ -294,7 +292,7 @@ public class ChuLiuEdmonds {
 		while (oNextBestEdge.isPresent()) {
 			final ExclusiveEdge nextBestEdge = oNextBestEdge.get();
 			if (!isAncestor(nextBestEdge.edge.source, maxInEdge.edge.destination, bestArborescence)) {
-				edgeQueue.addEdge(nextBestEdge.edge, nextBestEdge.weight, nextBestEdge.excluded);
+				edgeQueue.addEdge(nextBestEdge);
 				return oNextBestEdge;
 			} else {
 				oNextBestEdge = edgeQueue.popBestEdge();

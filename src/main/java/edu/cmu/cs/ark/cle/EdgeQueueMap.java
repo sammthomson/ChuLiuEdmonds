@@ -38,12 +38,11 @@ class EdgeQueueMap {
 			this.partition = partition;
 		}
 
-		public void addEdge(Edge edge, double weight, List<Edge> replaces) {
-			// TODO: why not just accept an ExclusiveEdge as a param?
+		public void addEdge(ExclusiveEdge exclusiveEdge) {
 			// only add if source is external to SCC
-			if (partition.componentOf(edge.source) == component) return;
+			if (partition.componentOf(exclusiveEdge.edge.source) == component) return;
 			// only keep the best edge for each source node
-			edges.add(new ExclusiveEdge(edge, replaces, weight));
+			edges.add(exclusiveEdge);
 		}
 
 		public Optional<ExclusiveEdge> popBestEdge() {
@@ -51,7 +50,7 @@ class EdgeQueueMap {
 		}
 
 		public Optional<ExclusiveEdge> popBestEdge(Map<Integer, Integer> bestArborescence) {
-			final List<ExclusiveEdge> maxInEdges = max(edges);
+			final List<ExclusiveEdge> maxInEdges = maxWithTies(edges);
 			if (maxInEdges.isEmpty()) return Optional.absent();
 			Optional<ExclusiveEdge> maxInEdge = Optional.absent();
 			for (ExclusiveEdge ee : maxInEdges) {
@@ -70,25 +69,23 @@ class EdgeQueueMap {
 		}
 	}
 
-	// TODO: move to a Utility or Collections class
-	// TODO: specialize to be quicker for a priority queue
-	public static <T extends Object & Comparable<? super T>> List<T> max(Collection<? extends T> coll) {
-		final Iterator<? extends T> i = coll.iterator();
+	public static <T extends Object & Comparable<? super T>> List<T> maxWithTies(PriorityQueue<T> queue) {
 		List<T> candidates = Lists.newArrayList();
-
-		while (i.hasNext()) {
-			T next = i.next();
-			if (candidates.isEmpty()) {
+		if (!queue.isEmpty()) {
+			candidates.add(queue.poll());
+		}
+		while (!queue.isEmpty()) {
+			T next = queue.poll();
+			final int cmp = queue.comparator().compare(candidates.get(0), next);
+			if (cmp == 0) {
 				candidates.add(next);
 			} else {
-				final int cmp = next.compareTo(candidates.get(0));
-				if (cmp == 0) {
-					candidates.add(next);
-				} else if (cmp > 0) {
-					candidates = Lists.newArrayList();
-					candidates.add(next);
-				}
+				queue.add(next);
+				break;
 			}
+		}
+		for (T candidate : candidates) {
+			queue.add(candidate);
 		}
 		return candidates;
 	}
@@ -104,7 +101,7 @@ class EdgeQueueMap {
 			queueByDestination.put(destination, new EdgeQueue(destination, partition));
 		}
 		final List<Edge> replaces = Lists.newLinkedList();
-		queueByDestination.get(destination).addEdge(edge, weight, replaces);
+		queueByDestination.get(destination).addEdge(new ExclusiveEdge(edge, replaces, weight));
 	}
 
 	public Optional<ExclusiveEdge> popBestEdge(int component, Map<Integer, Integer> best) {
@@ -120,7 +117,7 @@ class EdgeQueueMap {
 			for (ExclusiveEdge wEdgeAndExcluded : queue.edges) {
 				final List<Edge> replaces = wEdgeAndExcluded.excluded;
 				replaces.add(replace.val);
-				result.addEdge(wEdgeAndExcluded.edge, wEdgeAndExcluded.weight - replace.weight, replaces);
+				result.addEdge(new ExclusiveEdge(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
 			}
 		}
 		queueByDestination.put(component, result);
