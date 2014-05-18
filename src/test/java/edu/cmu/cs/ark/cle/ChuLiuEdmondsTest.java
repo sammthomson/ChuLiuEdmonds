@@ -85,7 +85,6 @@ public class ChuLiuEdmondsTest {
 				ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, 4);
 
 		Weighted<Map<Integer, Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
-//		printTree(weightedSpanningTree);
 		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
@@ -102,7 +101,6 @@ public class ChuLiuEdmondsTest {
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(2);
-		printTree(weightedSpanningTree);
 		maxBranching = weightedSpanningTree.val;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
@@ -111,7 +109,6 @@ public class ChuLiuEdmondsTest {
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(3);
-		printTree(weightedSpanningTree);
 		maxBranching = weightedSpanningTree.val;
 		assertEquals(2, maxBranching.get(1).intValue());
 		assertEquals(3, maxBranching.get(2).intValue());
@@ -125,10 +122,13 @@ public class ChuLiuEdmondsTest {
 		final int k = 100;
 		final List<Weighted<Map<Integer, Integer>>> kBestSpanningTrees = ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, k);
 		final int size = kBestSpanningTrees.size();
+		// make sure there are no more than k of them
 		assertTrue(size <= k);
+		// make sure they are in descending order
 		for (int i = 0; i + 1 < size; i++) {
 			assertTrue(kBestSpanningTrees.get(i).weight >= kBestSpanningTrees.get(i+1).weight);
 		}
+		// make sure they're all unique
 		final Set<String> kBestStrings = Sets.newHashSet();
 		for (Weighted<Map<Integer, Integer>> spanningTree : kBestSpanningTrees) {
 			kBestStrings.add(showTree(spanningTree));

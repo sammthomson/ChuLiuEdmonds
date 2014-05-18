@@ -49,6 +49,7 @@ class EdgeQueueMap {
 			return popBestEdge(ImmutableMap.<Integer, Integer>of());  // TODO: inefficient
 		}
 
+		/** Always breaks ties in favor of edges in bestArborescence */
 		public Optional<ExclusiveEdge> popBestEdge(Map<Integer, Integer> bestArborescence) {
 			final List<ExclusiveEdge> maxInEdges = maxWithTies(edges);
 			if (maxInEdges.isEmpty()) return Optional.absent();
@@ -104,6 +105,7 @@ class EdgeQueueMap {
 		queueByDestination.get(destination).addEdge(new ExclusiveEdge(edge, replaces, weight));
 	}
 
+	/** Always breaks ties in favor of edges in best */
 	public Optional<ExclusiveEdge> popBestEdge(int component, Map<Integer, Integer> best) {
 		if (!queueByDestination.containsKey(component)) return Optional.absent();
 		return queueByDestination.get(component).popBestEdge(best);

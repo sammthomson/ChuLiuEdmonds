@@ -44,10 +44,6 @@ public class ChuLiuEdmonds {
 		// edge weights are adjusted as we go to take into account the fact that we have an extra edge in each cycle
 		private double score;
 
-		public Subgraph(double[][] graph, Integer root) {
-			this(graph, root, ImmutableList.<Edge>of(), ImmutableList.<Edge>of());
-		}
-
 		public Subgraph(double[][] graph, Integer root, List<Edge> required, List<Edge> banned) {
 			final int numNodes = graph.length;
 			stronglyConnected = new Partition(numNodes);
@@ -179,6 +175,7 @@ public class ChuLiuEdmonds {
 			return popBestEdge(component, Maps.<Integer, Integer>newHashMap());
 		}
 
+		/** Always breaks ties in favor of edges in best */
 		public Optional<ExclusiveEdge> popBestEdge(int component, Map<Integer, Integer> best) {
 			return unseenIncomingEdges.popBestEdge(component, best);
 		}
@@ -302,7 +299,7 @@ public class ChuLiuEdmonds {
 	}
 
 	/**
-	 * Find the k best branchings of the given graph, rooted in the given node.
+	 * Find the diverse k-best arborescences of the given graph, rooted in the given node.
 	 * Induce diversity by penalizing results that share edges with previous results.
 	 *
 	 * @param originalGraph the graph to find branchings for
@@ -331,14 +328,18 @@ public class ChuLiuEdmonds {
 	}
 
 	private static class ElementOfPartitionOfSolutions implements Comparable<ElementOfPartitionOfSolutions> {
-		final double weight;
+		final double weightOfNextBest;
 		final Edge edgeToKickOut;
 		final Weighted<Map<Integer, Integer>> currentBest;
 		final List<Edge> required;
 		final List<Edge> banned;
 
-		public ElementOfPartitionOfSolutions(double weight, Edge edgeToKickOut, Weighted<Map<Integer, Integer>> currentBest, List<Edge> required, List<Edge> banned) {
-			this.weight = weight;
+		public ElementOfPartitionOfSolutions(double weightOfNextBest,
+											 Edge edgeToKickOut,
+											 Weighted<Map<Integer, Integer>> currentBest,
+											 List<Edge> required,
+											 List<Edge> banned) {
+			this.weightOfNextBest = weightOfNextBest;
 			this.edgeToKickOut = edgeToKickOut;
 			this.currentBest = currentBest;
 			this.required = required;
@@ -347,27 +348,33 @@ public class ChuLiuEdmonds {
 
 		@Override
 		public int compareTo(ElementOfPartitionOfSolutions other) {
-			return Doubles.compare(weight, other.weight);
+			return Doubles.compare(weightOfNextBest, other.weightOfNextBest);
 		}
 	}
 
+	/**
+	 * Find the k-best arborescences of the given graph, rooted in the given node.
+	 * Equivalent to the RANK function in Camerini et al. 1980
+	 */
 	public static List<Weighted<Map<Integer, Integer>>> getKBestSpanningTrees(double[][] weights, int root, int k) {
+		final List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayList();
+		if (k < 1) return results;
 		final List<Edge> initialRequired = ImmutableList.of();
 		final List<Edge> initialBanned = ImmutableList.of();
+
 		final PriorityQueue<ElementOfPartitionOfSolutions> queue =
 				new PriorityQueue<ElementOfPartitionOfSolutions>(3 * k, Collections.reverseOrder());  // want to pop max
-		final List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayList();
 		// 1-best
 		final Weighted<Map<Integer, Integer>> best = getMaxSpanningTree(weights, root);
 		results.add(best);
+		if (k < 2) return results;
+		// 2nd best
 		Optional<Pair<Edge, Double>> oEdgeToKickOutAndDiff = next(weights, root, initialRequired, initialBanned, best);
 		if (oEdgeToKickOutAndDiff.isPresent()) {
-			Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-			final Edge edge = edgeToKickOutAndDiff.first;
-			Double diff = edgeToKickOutAndDiff.second;
+			final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
 			queue.add(new ElementOfPartitionOfSolutions(
-					best.weight - diff,
-					edge,
+					best.weight - edgeToKickOutAndDiff.second,
+					edgeToKickOutAndDiff.first,
 					best,
 					initialRequired,
 					initialBanned
@@ -375,19 +382,18 @@ public class ChuLiuEdmonds {
 		}
 		for (int j = 1; j < k && !queue.isEmpty(); j++) {
 			final ElementOfPartitionOfSolutions element = queue.poll();
-			Edge edgeToKickOut = element.edgeToKickOut;
+			final Edge edgeToKickOut = element.edgeToKickOut;
 			final List<Edge> newRequired = copyOf(concat(element.required, singleton(edgeToKickOut)));
 			final ImmutableList<Edge> newBanned = copyOf(concat(element.banned, singleton(edgeToKickOut)));
 			final Weighted<Map<Integer, Integer>> jthBest = getMaxSpanningTree(weights, root, element.required, newBanned);
+			assert jthBest.weight == element.weightOfNextBest;
 			results.add(jthBest);
 			oEdgeToKickOutAndDiff = next(weights, root, newRequired, element.banned, element.currentBest);
 			if (oEdgeToKickOutAndDiff.isPresent()) {
 				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-				final double diff = edgeToKickOutAndDiff.second;
-				edgeToKickOut = edgeToKickOutAndDiff.first;
 				queue.add(new ElementOfPartitionOfSolutions(
-						element.currentBest.weight - diff,
-						edgeToKickOut,
+						element.currentBest.weight - edgeToKickOutAndDiff.second,
+						edgeToKickOutAndDiff.first,
 						element.currentBest,
 						newRequired,
 						element.banned
@@ -396,11 +402,9 @@ public class ChuLiuEdmonds {
 			oEdgeToKickOutAndDiff = next(weights, root, element.required, newBanned, jthBest);
 			if (oEdgeToKickOutAndDiff.isPresent()) {
 				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-				final double diff = edgeToKickOutAndDiff.second;
-				edgeToKickOut = edgeToKickOutAndDiff.first;
 				queue.add(new ElementOfPartitionOfSolutions(
-						element.weight - diff,
-						edgeToKickOut,
+						element.weightOfNextBest - edgeToKickOutAndDiff.second,
+						edgeToKickOutAndDiff.first,
 						jthBest,
 						element.required,
 						newBanned
