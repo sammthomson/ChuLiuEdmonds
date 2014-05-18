@@ -172,7 +172,7 @@ public class ChuLiuEdmondsTest {
 		// get the best tree A(1)
 		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> oPair =
-				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best);
+				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best.val);
 		assertTrue(oPair.isPresent());
 		final Pair<Edge, Double> pair = oPair.get();
 		assertEquals(new Edge(0, 1), pair.first);
@@ -184,7 +184,7 @@ public class ChuLiuEdmondsTest {
 		// get the best tree A(1)
 		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> oPair =
-				ChuLiuEdmonds.next(weights, 0, ImmutableList.of(new Edge(0, 1)), ImmutableList.<Edge>of(), best);
+				ChuLiuEdmonds.next(weights, 0, ImmutableList.of(new Edge(0, 1)), ImmutableList.<Edge>of(), best.val);
 		assertTrue(oPair.isPresent());
 		final Pair<Edge, Double> pair = oPair.get();
 		assertEquals(new Edge(2, 3), pair.first);
@@ -200,7 +200,7 @@ public class ChuLiuEdmondsTest {
 		// get the best tree A(1)
 		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> pair =
-				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best);
+				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best.val);
 		assertFalse(pair.isPresent());
 	}
 

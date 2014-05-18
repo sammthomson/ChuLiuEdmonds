@@ -182,6 +182,39 @@ public class ChuLiuEdmonds {
 	}
 
 	/**
+	 * Represents a subset of all possible spanning arborescences: those that contain all of `required` and
+	 * none of `banned`.
+	 * Contains `bestArborescence`, the best arborescence in this subset, as well as `weightOfNextBest`,
+	 * the weight of the second best, and `edgeToBan`,the edge you need to ban in order to get the
+	 * second best.
+	 */
+	private static class SubsetOfSolutions implements Comparable<SubsetOfSolutions> {
+		final double weightOfNextBest;
+		final Edge edgeToBan;
+		final Weighted<Map<Integer, Integer>> bestArborescence;
+		final List<Edge> required;
+		final List<Edge> banned;
+
+		public SubsetOfSolutions(double weightOfNextBest,
+								 Edge edgeToBan,
+								 Weighted<Map<Integer, Integer>> bestArborescence,
+								 List<Edge> required,
+								 List<Edge> banned) {
+			this.weightOfNextBest = weightOfNextBest;
+			this.edgeToBan = edgeToBan;
+			this.bestArborescence = bestArborescence;
+			this.required = required;
+			this.banned = banned;
+		}
+
+		@Override
+		public int compareTo(SubsetOfSolutions other) {
+			return Doubles.compare(weightOfNextBest, other.weightOfNextBest);
+		}
+	}
+
+
+	/**
 	 * Find an optimal branching of the given graph, rooted in the given node.
 	 * This is the main entry point for the algorithm.
 	 */
@@ -217,12 +250,16 @@ public class ChuLiuEdmonds {
 		return subgraph.getParentsMap();
 	}
 
-	/** Corresponds to the NEXT function in Camerini et al. 1980 */
+	/**
+	 * Finds the edge you need to ban in order to get the second best solution (and how much worse that
+	 * second best solution will be)
+	 * Corresponds to the NEXT function in Camerini et al. 1980
+	 */
 	public static Optional<Pair<Edge, Double>> next(double[][] graph,
 													int root,
 													List<Edge> required,
 													List<Edge> banned,
-													Weighted<Map<Integer,Integer>> best) {
+													Map<Integer,Integer> bestArborescence) {
 		final int numNodes = graph.length;
 		// result
 		final Subgraph subgraph = new Subgraph(graph, root, required, banned);
@@ -238,13 +275,13 @@ public class ChuLiuEdmonds {
 		while (!componentsWithNoInEdges.isEmpty()) {
 			final int component = componentsWithNoInEdges.poll();
 			// find maximum edge entering 'component' from the outside.
-			// break ties in favor of edges in best
-			final Optional<ExclusiveEdge> oMaxInEdge = subgraph.popBestEdge(component, best.val);
+			// break ties in favor of edges in bestArborescence
+			final Optional<ExclusiveEdge> oMaxInEdge = subgraph.popBestEdge(component, bestArborescence);
 			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
 			final ExclusiveEdge maxInEdge = oMaxInEdge.get();
-			if (best.val.get(maxInEdge.edge.destination) == maxInEdge.edge.source && !required.contains(maxInEdge.edge)) {
+			if (bestArborescence.get(maxInEdge.edge.destination) == maxInEdge.edge.source && !required.contains(maxInEdge.edge)) {
 				final Optional<ExclusiveEdge> oAlternativeEdge =
-						seek(maxInEdge, best.val, subgraph.unseenIncomingEdges.queueByDestination.get(component));
+						seek(maxInEdge, bestArborescence, subgraph.unseenIncomingEdges.queueByDestination.get(component));
 				if (oAlternativeEdge.isPresent()) {
 					final ExclusiveEdge alternativeEdge = oAlternativeEdge.get();
 					final double difference = maxInEdge.weight - alternativeEdge.weight;
@@ -280,11 +317,12 @@ public class ChuLiuEdmonds {
 	}
 
 	/**
-	 * Finds nextBestEdge, the next best alternative to maxInEdge for which the tail of
-	 * maxInEdge is not an ancestor of the source of nextBestEdge in bestArborescence
+	 * Finds `nextBestEdge`, the next best alternative to `maxInEdge` for which the tail of
+	 * `maxInEdge` is not an ancestor of the source of `nextBestEdge` in `bestArborescence`
 	 */
-	public static Optional<ExclusiveEdge>
-			seek(ExclusiveEdge maxInEdge, Map<Integer, Integer> bestArborescence, EdgeQueueMap.EdgeQueue edgeQueue) {
+	public static Optional<ExclusiveEdge> seek(ExclusiveEdge maxInEdge,
+											   Map<Integer, Integer> bestArborescence,
+											   EdgeQueueMap.EdgeQueue edgeQueue) {
 		Optional<ExclusiveEdge> oNextBestEdge = edgeQueue.popBestEdge();
 		while (oNextBestEdge.isPresent()) {
 			final ExclusiveEdge nextBestEdge = oNextBestEdge.get();
@@ -308,8 +346,10 @@ public class ChuLiuEdmonds {
 	 * @param alpha the factor by which to penalize repeated edges
 	 * @return a list of the k best branchings, along with their scores
 	 */
-	public static List<Weighted<Map<Integer,Integer>>>
-			getDiverseKBestSpanningTrees(double[][] originalGraph, int root, int k, double alpha) {
+	public static List<Weighted<Map<Integer,Integer>>> getDiverseKBestSpanningTrees(double[][] originalGraph,
+																					int root,
+																					int k,
+																					double alpha) {
 		// make a copy; we're about to mutate this
 		final double[][] graph = new double[originalGraph.length][];
 		for (int i = 0; i < originalGraph.length; i++) graph[i] = originalGraph[i].clone();
@@ -327,31 +367,6 @@ public class ChuLiuEdmonds {
 		return results;
 	}
 
-	private static class ElementOfPartitionOfSolutions implements Comparable<ElementOfPartitionOfSolutions> {
-		final double weightOfNextBest;
-		final Edge edgeToKickOut;
-		final Weighted<Map<Integer, Integer>> currentBest;
-		final List<Edge> required;
-		final List<Edge> banned;
-
-		public ElementOfPartitionOfSolutions(double weightOfNextBest,
-											 Edge edgeToKickOut,
-											 Weighted<Map<Integer, Integer>> currentBest,
-											 List<Edge> required,
-											 List<Edge> banned) {
-			this.weightOfNextBest = weightOfNextBest;
-			this.edgeToKickOut = edgeToKickOut;
-			this.currentBest = currentBest;
-			this.required = required;
-			this.banned = banned;
-		}
-
-		@Override
-		public int compareTo(ElementOfPartitionOfSolutions other) {
-			return Doubles.compare(weightOfNextBest, other.weightOfNextBest);
-		}
-	}
-
 	/**
 	 * Find the k-best arborescences of the given graph, rooted in the given node.
 	 * Equivalent to the RANK function in Camerini et al. 1980
@@ -359,56 +374,53 @@ public class ChuLiuEdmonds {
 	public static List<Weighted<Map<Integer, Integer>>> getKBestSpanningTrees(double[][] weights, int root, int k) {
 		final List<Weighted<Map<Integer, Integer>>> results = Lists.newArrayList();
 		if (k < 1) return results;
-		final List<Edge> initialRequired = ImmutableList.of();
-		final List<Edge> initialBanned = ImmutableList.of();
-
-		final PriorityQueue<ElementOfPartitionOfSolutions> queue =
-				new PriorityQueue<ElementOfPartitionOfSolutions>(3 * k, Collections.reverseOrder());  // want to pop max
 		// 1-best
 		final Weighted<Map<Integer, Integer>> best = getMaxSpanningTree(weights, root);
 		results.add(best);
 		if (k < 2) return results;
-		// 2nd best
-		Optional<Pair<Edge, Double>> oEdgeToKickOutAndDiff = next(weights, root, initialRequired, initialBanned, best);
-		if (oEdgeToKickOutAndDiff.isPresent()) {
-			final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-			queue.add(new ElementOfPartitionOfSolutions(
-					best.weight - edgeToKickOutAndDiff.second,
-					edgeToKickOutAndDiff.first,
+		// reverseOrder b/c we want poll to give us the max
+		final PriorityQueue<SubsetOfSolutions> queue =
+				new PriorityQueue<SubsetOfSolutions>(3 * k, Collections.reverseOrder());
+		// find the edge you need to ban to get the 2nd best
+		final List<Edge> empty = ImmutableList.of();
+		Optional<Pair<Edge, Double>> oEdgeToBanAndDiff = next(weights, root, empty, empty, best.val);
+		for (Pair<Edge, Double> edgeToBanAndDiff : oEdgeToBanAndDiff.asSet()) {
+			queue.add(new SubsetOfSolutions(
+					best.weight - edgeToBanAndDiff.second,
+					edgeToBanAndDiff.first,
 					best,
-					initialRequired,
-					initialBanned
-			));
+					empty,
+					empty));
 		}
-		for (int j = 1; j < k && !queue.isEmpty(); j++) {
-			final ElementOfPartitionOfSolutions element = queue.poll();
-			final Edge edgeToKickOut = element.edgeToKickOut;
-			final List<Edge> newRequired = copyOf(concat(element.required, singleton(edgeToKickOut)));
-			final ImmutableList<Edge> newBanned = copyOf(concat(element.banned, singleton(edgeToKickOut)));
-			final Weighted<Map<Integer, Integer>> jthBest = getMaxSpanningTree(weights, root, element.required, newBanned);
-			assert jthBest.weight == element.weightOfNextBest;
+		for (int j = 2; j <= k && !queue.isEmpty(); j++) {
+			final SubsetOfSolutions item = queue.poll();
+			// divide this subset into 2: things that have `edgeToBan`, and those that don't
+			// We have already pre-calculated that `jthBest` will not contain `edgeToBan`
+			final ImmutableList<Edge> newBanned = copyOf(concat(item.banned, singleton(item.edgeToBan)));
+			// j-th best
+			final Weighted<Map<Integer, Integer>> jthBest = getMaxSpanningTree(weights, root, item.required, newBanned);
+			assert jthBest.weight == item.weightOfNextBest;
 			results.add(jthBest);
-			oEdgeToKickOutAndDiff = next(weights, root, newRequired, element.banned, element.currentBest);
-			if (oEdgeToKickOutAndDiff.isPresent()) {
-				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-				queue.add(new ElementOfPartitionOfSolutions(
-						element.currentBest.weight - edgeToKickOutAndDiff.second,
-						edgeToKickOutAndDiff.first,
-						element.currentBest,
-						newRequired,
-						element.banned
-				));
-			}
-			oEdgeToKickOutAndDiff = next(weights, root, element.required, newBanned, jthBest);
-			if (oEdgeToKickOutAndDiff.isPresent()) {
-				final Pair<Edge, Double> edgeToKickOutAndDiff = oEdgeToKickOutAndDiff.get();
-				queue.add(new ElementOfPartitionOfSolutions(
-						element.weightOfNextBest - edgeToKickOutAndDiff.second,
-						edgeToKickOutAndDiff.first,
+			// subset of solutions in item that *don't* have `edgeToBan`, except `jthBest`
+			oEdgeToBanAndDiff = next(weights, root, item.required, newBanned, jthBest.val);
+			for (Pair<Edge, Double> edgeToBanAndDiff : oEdgeToBanAndDiff.asSet()) {
+				queue.add(new SubsetOfSolutions(
+						item.weightOfNextBest - edgeToBanAndDiff.second,
+						edgeToBanAndDiff.first,
 						jthBest,
-						element.required,
-						newBanned
-				));
+						item.required,
+						newBanned));
+			}
+			// subset of solutions in item that *do* have `edgeToBan`, except `bestArborescence`
+			final List<Edge> newRequired = copyOf(concat(item.required, singleton(item.edgeToBan)));
+			oEdgeToBanAndDiff = next(weights, root, newRequired, item.banned, item.bestArborescence.val);
+			for (Pair<Edge, Double> edgeToBanAndDiff : oEdgeToBanAndDiff.asSet()) {
+				queue.add(new SubsetOfSolutions(
+						item.bestArborescence.weight - edgeToBanAndDiff.second,
+						edgeToBanAndDiff.first,
+						item.bestArborescence,
+						newRequired,
+						item.banned));
 			}
 		}
 		return results;
