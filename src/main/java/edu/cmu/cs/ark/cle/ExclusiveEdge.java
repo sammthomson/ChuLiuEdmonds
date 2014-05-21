@@ -21,6 +21,6 @@ public class ExclusiveEdge implements Comparable<ExclusiveEdge> {
 	}
 
 	@Override public int compareTo(ExclusiveEdge exclusiveEdge) {
-		return Doubles.compare(exclusiveEdge.weight, weight);
+		return Doubles.compare(weight, exclusiveEdge.weight);
 	}
 }

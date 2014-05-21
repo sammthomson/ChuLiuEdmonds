@@ -21,4 +21,15 @@ public class Edge {
 				.add("source", source)
 				.add("destination", destination).toString();
 	}
+
+	@Override public boolean equals(Object obj) {
+		if (obj == null) {
+			return false;
+		}
+		if (getClass() != obj.getClass()) {
+			return false;
+		}
+		final Edge other = (Edge) obj;
+		return this.source == other.source && this.destination == other.destination;
+	}
 }
