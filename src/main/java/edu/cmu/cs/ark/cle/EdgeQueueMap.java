@@ -7,26 +7,11 @@ import com.google.common.collect.Maps;
 
 import java.util.*;
 
-/**
- * A set of queues optimized for keeping track of unprocessed Edges entering each component during the CLE algorithm.
- *
- * addEdge: O(inverseAckermann(n))
- * 	   (basically O(1), and exactly O(1) at the beginning when all components are singletons)
- * popBestEdge: O(n)
- * merge: O(n)
- * in number of nodes
- *
- * @author sthomson@cs.cmu.edu
- */
+
 class EdgeQueueMap {
 	Partition partition;
 	public final Map<Integer, EdgeQueue> queueByDestination;
 
-	/**
-	 * A queue of edges entering one component.
-	 * The trick is to keep track of only the best edge for each source node.
-	 * This means the number of edges in the queue is bounded by the number of nodes.
-	 */
 	public static class EdgeQueue {
 		private final int component;
 		public final PriorityQueue<ExclusiveEdge> edges;
