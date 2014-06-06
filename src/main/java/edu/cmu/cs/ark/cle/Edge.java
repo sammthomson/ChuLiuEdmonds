@@ -3,13 +3,29 @@ package edu.cmu.cs.ark.cle;
 import com.google.common.base.Objects;
 
 /** An edge in a directed graph. */
-public class Edge {
-	public final int source;
-	public final int destination;
+public class Edge<V> {
+	public final V source;
+	public final V destination;
 
-	public Edge(int source, int destination) {
+	public Edge(V source, V destination) {
 		this.source = source;
 		this.destination = destination;
+	}
+
+	public static class EdgeBuilder<V> {
+		public final V source;
+
+		private EdgeBuilder(V source) {
+			this.source = source;
+		}
+
+		public Edge<V> to(V destination) {
+			return new Edge<V>(source, destination);
+		}
+	}
+
+	public static <T> EdgeBuilder<T> from(T source) {
+		return new EdgeBuilder<T>(source);
 	}
 
 	@Override public int hashCode() {

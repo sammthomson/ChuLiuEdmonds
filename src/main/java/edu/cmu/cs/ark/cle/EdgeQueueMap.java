@@ -10,41 +10,44 @@ import java.util.Map;
 import java.util.PriorityQueue;
 
 
-class EdgeQueueMap {
-	Partition partition;
-	public final Map<Integer, EdgeQueue> queueByDestination;
+class EdgeQueueMap<V> {
+	final Partition<V> partition;
+	public final Map<V, EdgeQueue<V>> queueByDestination;
 
-	public static class EdgeQueue {
-		private final int component;
-		public final PriorityQueue<ExclusiveEdge> edges;
-		private final Partition partition;
+	public static class EdgeQueue<V> {
+		private final V component;
+		public final PriorityQueue<ExclusiveEdge<V>> edges;
+		private final Partition<V> partition;
 
-		public EdgeQueue(int component, Partition partition) {
+		private EdgeQueue(V component, Partition<V> partition) {
 			this.component = component;
-			this.edges = new PriorityQueue<ExclusiveEdge>(11, Collections.reverseOrder()); // Important: don't keep this sorted. need O(1) insert time
+			this.edges = new PriorityQueue<ExclusiveEdge<V>>(11, Collections.reverseOrder());
 			this.partition = partition;
 		}
 
-		public void addEdge(ExclusiveEdge exclusiveEdge) {
+		public static <T> EdgeQueue<T> create(T component, Partition<T> partition) {
+			return new EdgeQueue<T>(component, partition);
+		}
+
+		public void addEdge(ExclusiveEdge<V> exclusiveEdge) {
 			// only add if source is external to SCC
 			if (partition.componentOf(exclusiveEdge.edge.source) == component) return;
 			// only keep the best edge for each source node
 			edges.add(exclusiveEdge);
 		}
 
-		public Optional<ExclusiveEdge> popBestEdge() {
-			return popBestEdge(Arborescence.EMPTY);
+		public Optional<ExclusiveEdge<V>> popBestEdge() {
+			return popBestEdge(Arborescence.<V>empty());
 		}
 
-		/** Always breaks ties in favor of edges in bestArborescence
-		 * @param bestArborescence*/
-		public Optional<ExclusiveEdge> popBestEdge(Arborescence bestArborescence) {
-			final List<ExclusiveEdge> maxInEdges = maxWithTies(edges);
+		/** Always breaks ties in favor of edges in bestArborescence */
+		public Optional<ExclusiveEdge<V>> popBestEdge(Arborescence<V> bestArborescence) {
+			final List<ExclusiveEdge<V>> maxInEdges = maxWithTies(edges);
 			if (maxInEdges.isEmpty()) return Optional.absent();
-			Optional<ExclusiveEdge> maxInEdge = Optional.absent();
-			for (ExclusiveEdge ee : maxInEdges) {
-				final Edge e = ee.edge;
-				final int dest = e.destination;
+			Optional<ExclusiveEdge<V>> maxInEdge = Optional.absent();
+			for (ExclusiveEdge<V> ee : maxInEdges) {
+				final Edge<V> e = ee.edge;
+				final V dest = e.destination;
 				if (bestArborescence.parents.containsKey(dest) && bestArborescence.parents.get(dest) == e.source) {
 					maxInEdge = Optional.of(ee);
 					break;
@@ -79,35 +82,35 @@ class EdgeQueueMap {
 		return candidates;
 	}
 
-	EdgeQueueMap(Partition partition) {
+	EdgeQueueMap(Partition<V> partition) {
 		this.partition = partition;
 		this.queueByDestination = Maps.newHashMap();
 	}
 
-	public void addEdge(Edge edge, double weight) {
-		final int destination = partition.componentOf(edge.destination);
+	public void addEdge(Edge<V> edge, double weight) {
+		final V destination = partition.componentOf(edge.destination);
 		if (!queueByDestination.containsKey(destination)) {
-			queueByDestination.put(destination, new EdgeQueue(destination, partition));
+			queueByDestination.put(destination, EdgeQueue.create(destination, partition));
 		}
-		final List<Edge> replaces = Lists.newLinkedList();
-		queueByDestination.get(destination).addEdge(new ExclusiveEdge(edge, replaces, weight));
+		final List<Edge<V>> replaces = Lists.newLinkedList();
+		queueByDestination.get(destination).addEdge(new ExclusiveEdge<V>(edge, replaces, weight));
 	}
 
 	/** Always breaks ties in favor of edges in best */
-	public Optional<ExclusiveEdge> popBestEdge(int component, Arborescence best) {
+	public Optional<ExclusiveEdge<V>> popBestEdge(V component, Arborescence<V> best) {
 		if (!queueByDestination.containsKey(component)) return Optional.absent();
 		return queueByDestination.get(component).popBestEdge(best);
 	}
 
-	public EdgeQueue merge(int component, Iterable<Pair<EdgeQueue, Weighted<Edge>>> queuesToMerge) {
-		EdgeQueue result = new EdgeQueue(component, partition);
-		for (Pair<EdgeQueue, Weighted<Edge>> queueAndReplace : queuesToMerge) {
-			final EdgeQueue queue = queueAndReplace.first;
-			final Weighted<Edge> replace = queueAndReplace.second;
-			for (ExclusiveEdge wEdgeAndExcluded : queue.edges) {
-				final List<Edge> replaces = wEdgeAndExcluded.excluded;
+	public EdgeQueue merge(V component, Iterable<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge) {
+		EdgeQueue<V> result = EdgeQueue.create(component, partition);
+		for (Pair<EdgeQueue<V>, Weighted<Edge<V>>> queueAndReplace : queuesToMerge) {
+			final EdgeQueue<V> queue = queueAndReplace.first;
+			final Weighted<Edge<V>> replace = queueAndReplace.second;
+			for (ExclusiveEdge<V> wEdgeAndExcluded : queue.edges) {
+				final List<Edge<V>> replaces = wEdgeAndExcluded.excluded;
 				replaces.add(replace.val);
-				result.addEdge(new ExclusiveEdge(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
+				result.addEdge(new ExclusiveEdge<V>(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
 			}
 		}
 		queueByDestination.put(component, result);

@@ -1,61 +1,71 @@
 package edu.cmu.cs.ark.cle;
 
+import com.google.common.collect.Maps;
+
+import java.util.Collection;
+import java.util.Map;
+
 /**
  * Union-Find Data Structure
  *
  * @author sthomson@cs.cmu.edu
  */
-public class Partition {
-	private final int[] parents;
-	private final int[] ranks;
+public class Partition<V> {
+	private final Map<V, V> parents;
+	private final Map<V, Integer> ranks;
 
-	/**
-	 * Constructs a new partition of singletons
-	 * @param n the size of your collection
-	 */
-	public Partition(int n) {
-		parents = new int[n];
-		ranks = new int[n];
-		for(int i = 0; i < n; i++) {
-			parents[i] = i; // each node is its own head
-			ranks[i] = 0; // every node has depth 0 to start
+	private Partition(Map<V, V> parents, Map<V, Integer> ranks) {
+		this.parents = parents;
+		this.ranks = ranks;
+	}
+
+	/** Constructs a new partition of singletons */
+	public static <T> Partition<T> singletons(Collection<T> nodes) {
+		final Map<T, T> parents = Maps.newHashMap();
+		final Map<T, Integer> ranks = Maps.newHashMap();
+		for(T node : nodes) {
+			parents.put(node, node); // each node is its own head
+			ranks.put(node, 0); // every node has depth 0 to start
 		}
+		return new Partition<T>(parents, ranks);
 	}
 
 	/** Find the representative for the given item */
-	public int componentOf(int i) {
-		if (parents[i] == i) {
+	public V componentOf(V i) {
+		final V parent = parents.get(i);
+		if (parent.equals(i)) {
 			return i;
 		} else {
-			parents[i] = componentOf(parents[i]);
+			// collapse, so next lookup is O(1)
+			parents.put(i, componentOf(parent));
 		}
-		return parents[i];
+		return parents.get(i);
 	}
 
 	/** Merges the given components and returns the representative of the new component */
-	public int merge(int a, int b) {
-		final int aHead = componentOf(a);
-		final int bHead = componentOf(b);
-		if(aHead == bHead) return aHead;
+	public V merge(V a, V b) {
+		final V aHead = componentOf(a);
+		final V bHead = componentOf(b);
+		if(aHead.equals(bHead)) return aHead;
 		// add the shorter tree underneath the taller tree
-		final int aRank = ranks[aHead];
-		final int bRank = ranks[bHead];
+		final int aRank = ranks.get(aHead);
+		final int bRank = ranks.get(bHead);
 		if (aRank > bRank) {
-			parents[bHead] = aHead;
+			parents.put(bHead, aHead);
 			return aHead;
 		} else if (bRank > aRank) {
-			parents[aHead] = bHead;
+			parents.put(aHead, bHead);
 			return bHead;
 		} else {
 			// whoops, the tree got taller
-			parents[bHead] = aHead;
-			ranks[aHead] = aRank + 1;
+			parents.put(bHead, aHead);
+			ranks.put(aHead, aRank + 1);
 			return aHead;
 		}
 	}
 
 	/** Determines whether the two items are in the same component or not */
-	public boolean sameComponent(int a, int b) {
+	public boolean sameComponent(V a, V b) {
 		return componentOf(a) == componentOf(b);
 	}
 }
