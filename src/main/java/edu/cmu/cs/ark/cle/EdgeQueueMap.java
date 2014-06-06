@@ -1,11 +1,13 @@
 package edu.cmu.cs.ark.cle;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
 
 
 class EdgeQueueMap {
@@ -31,18 +33,19 @@ class EdgeQueueMap {
 		}
 
 		public Optional<ExclusiveEdge> popBestEdge() {
-			return popBestEdge(ImmutableMap.<Integer, Integer>of());  // TODO: inefficient
+			return popBestEdge(Arborescence.EMPTY);
 		}
 
-		/** Always breaks ties in favor of edges in bestArborescence */
-		public Optional<ExclusiveEdge> popBestEdge(Map<Integer, Integer> bestArborescence) {
+		/** Always breaks ties in favor of edges in bestArborescence
+		 * @param bestArborescence*/
+		public Optional<ExclusiveEdge> popBestEdge(Arborescence bestArborescence) {
 			final List<ExclusiveEdge> maxInEdges = maxWithTies(edges);
 			if (maxInEdges.isEmpty()) return Optional.absent();
 			Optional<ExclusiveEdge> maxInEdge = Optional.absent();
 			for (ExclusiveEdge ee : maxInEdges) {
 				final Edge e = ee.edge;
 				final int dest = e.destination;
-				if (bestArborescence.containsKey(dest) && bestArborescence.get(dest) == e.source) {
+				if (bestArborescence.parents.containsKey(dest) && bestArborescence.parents.get(dest) == e.source) {
 					maxInEdge = Optional.of(ee);
 					break;
 				}
@@ -91,7 +94,7 @@ class EdgeQueueMap {
 	}
 
 	/** Always breaks ties in favor of edges in best */
-	public Optional<ExclusiveEdge> popBestEdge(int component, Map<Integer, Integer> best) {
+	public Optional<ExclusiveEdge> popBestEdge(int component, Arborescence best) {
 		if (!queueByDestination.containsKey(component)) return Optional.absent();
 		return queueByDestination.get(component).popBestEdge(best);
 	}

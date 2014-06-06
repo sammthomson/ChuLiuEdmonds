@@ -27,13 +27,14 @@ public class ChuLiuEdmondsTest {
 			{NINF, 9, 8, NINF},
 	};
 
-	private void assertEdgesSumToScore(double[][] originalEdgeWeights, Weighted<Map<Integer,Integer>> parentsMap) {
+	private void assertEdgesSumToScore(double[][] originalEdgeWeights, Weighted<Arborescence> bestTree) {
+		final Map<Integer, Integer> parentsMap = bestTree.val.parents;
 		double sumOfWeights = 0.0;
-		for (int to = 1; to <= parentsMap.val.size(); ++to) {
-			final int from = parentsMap.val.get(to);
+		for (int to = 1; to <= parentsMap.size(); ++to) {
+			final int from = parentsMap.get(to);
 			sumOfWeights += originalEdgeWeights[from][to];
 		}
-		assertEquals(sumOfWeights, parentsMap.weight, DELTA);
+		assertEquals(sumOfWeights, bestTree.weight, DELTA);
 	}
 
 	@Test
@@ -57,7 +58,7 @@ public class ChuLiuEdmondsTest {
 				{NINF, NINF, 40, NINF, NINF},
 				{NINF, NINF, NINF, NINF, NINF},
 		};
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		printTree(weightedSpanningTree);
 		/*
 		root
@@ -70,7 +71,7 @@ public class ChuLiuEdmondsTest {
 		(3)       (2) ------> (4)
 		  \-------^
 		 */
-		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(2, maxBranching.get(1).intValue());
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
@@ -81,11 +82,11 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testGetKBest() {
-		final List<Weighted<Map<Integer, Integer>>> weightedSpanningTrees =
+		final List<Weighted<Arborescence>> weightedSpanningTrees =
 				ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, 4);
 
-		Weighted<Map<Integer, Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
-		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		Weighted<Arborescence> weightedSpanningTree = weightedSpanningTrees.get(0);
+		Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
 		assertEquals(2, maxBranching.get(3).intValue());
@@ -93,7 +94,7 @@ public class ChuLiuEdmondsTest {
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(1);
-		maxBranching = weightedSpanningTree.val;
+		maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(3, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
@@ -101,7 +102,7 @@ public class ChuLiuEdmondsTest {
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(2);
-		maxBranching = weightedSpanningTree.val;
+		maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
 		assertEquals(1, maxBranching.get(3).intValue());
@@ -109,7 +110,7 @@ public class ChuLiuEdmondsTest {
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(3);
-		maxBranching = weightedSpanningTree.val;
+		maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(2, maxBranching.get(1).intValue());
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
@@ -120,7 +121,7 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testGetLotsOfKBest() {
 		final int k = 100;
-		final List<Weighted<Map<Integer, Integer>>> kBestSpanningTrees = ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, k);
+		final List<Weighted<Arborescence>> kBestSpanningTrees = ChuLiuEdmonds.getKBestSpanningTrees(weights, 0, k);
 		final int size = kBestSpanningTrees.size();
 		// make sure there are no more than k of them
 		assertTrue(size <= k);
@@ -130,7 +131,7 @@ public class ChuLiuEdmondsTest {
 		}
 		// make sure they're all unique
 		final Set<String> kBestStrings = Sets.newHashSet();
-		for (Weighted<Map<Integer, Integer>> spanningTree : kBestSpanningTrees) {
+		for (Weighted<Arborescence> spanningTree : kBestSpanningTrees) {
 			kBestStrings.add(showTree(spanningTree));
 		}
 		assertEquals(size, kBestStrings.size());
@@ -138,7 +139,7 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testSeekDoesntReturnAncestor() {
-		final Weighted<Map<Integer, Integer>> bestArborescence = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> bestArborescence = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		final ExclusiveEdge maxInEdge = new ExclusiveEdge(new Edge(1, 2), ImmutableList.<Edge>of(), 11.0);
 		final EdgeQueueMap.EdgeQueue edgeQueue = new EdgeQueueMap.EdgeQueue(maxInEdge.edge.destination, new Partition(4));
 		edgeQueue.addEdge(new ExclusiveEdge(new Edge(0, 2), ImmutableList.<Edge>of(), 1.0));
@@ -161,7 +162,7 @@ public class ChuLiuEdmondsTest {
 		final EdgeQueueMap.EdgeQueue edgeQueue = new EdgeQueueMap.EdgeQueue(maxInEdge.edge.destination, new Partition(4));
 		edgeQueue.addEdge(new ExclusiveEdge(new Edge(0, 1), ImmutableList.<Edge>of(), 5.0));
 		edgeQueue.addEdge(new ExclusiveEdge(new Edge(3, 1), ImmutableList.<Edge>of(), 9.0));
-		final Optional<ExclusiveEdge> nextBestEdge = ChuLiuEdmonds.seek(maxInEdge, best, edgeQueue);
+		final Optional<ExclusiveEdge> nextBestEdge = ChuLiuEdmonds.seek(maxInEdge, new Arborescence(best), edgeQueue);
 		assertTrue(nextBestEdge.isPresent());
 		assertEquals(new Edge(3, 1), nextBestEdge.get().edge);
 		assertEquals(9.0, nextBestEdge.get().weight, DELTA);
@@ -170,7 +171,7 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testNext() {
 		// get the best tree A(1)
-		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> oPair =
 				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best.val);
 		assertTrue(oPair.isPresent());
@@ -182,7 +183,7 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testNextWithRequiredEdges() {
 		// get the best tree A(1)
-		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> oPair =
 				ChuLiuEdmonds.next(weights, 0, ImmutableList.of(new Edge(0, 1)), ImmutableList.<Edge>of(), best.val);
 		assertTrue(oPair.isPresent());
@@ -198,7 +199,7 @@ public class ChuLiuEdmondsTest {
 				{NINF, NINF}
 		};
 		// get the best tree A(1)
-		final Weighted<Map<Integer, Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> best = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		Optional<Pair<Edge, Double>> pair =
 				ChuLiuEdmonds.next(weights, 0, ImmutableList.<Edge>of(), ImmutableList.<Edge>of(), best.val);
 		assertFalse(pair.isPresent());
@@ -206,9 +207,9 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testRequiredAndBannedEdges() {
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree =
+		final Weighted<Arborescence> weightedSpanningTree =
 				ChuLiuEdmonds.getMaxSpanningTree(weights, 0, ImmutableList.of(new Edge(0, 1)), ImmutableList.of(new Edge(2, 3)));
-		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(1, maxBranching.get(2).intValue());
 		assertEquals(1, maxBranching.get(3).intValue());
@@ -219,9 +220,9 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testRequiredAndBannedEdges2() {
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree =
+		final Weighted<Arborescence> weightedSpanningTree =
 				ChuLiuEdmonds.getMaxSpanningTree(weights, 0, ImmutableList.of(new Edge(0, 3), new Edge(3, 1)), ImmutableList.of(new Edge(1, 2)));
-		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(3, maxBranching.get(1).intValue());
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
@@ -251,9 +252,9 @@ public class ChuLiuEdmondsTest {
 				{NINF, 20, 40, NINF, NINF},
 				{NINF, 20, 50, NINF, NINF},
 		};
-		final List<Weighted<Map<Integer, Integer>>> weightedSpanningTrees =
+		final List<Weighted<Arborescence>> weightedSpanningTrees =
 				ChuLiuEdmonds.getDiverseKBestSpanningTrees(weights, 0, 2, 50.0);
-		for (Weighted<Map<Integer, Integer>> weightedSpanningTree : weightedSpanningTrees) {
+		for (Weighted<Arborescence> weightedSpanningTree : weightedSpanningTrees) {
 			printTree(weightedSpanningTree);
 		}
 		/*
@@ -267,8 +268,8 @@ public class ChuLiuEdmondsTest {
 		(3)<----- (2) <----- (4)
 		                50
 		 */
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
-		Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Weighted<Arborescence> weightedSpanningTree = weightedSpanningTrees.get(0);
+		Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEquals(0, maxBranching.get(1).intValue());
 		assertEquals(4, maxBranching.get(2).intValue());
 		assertEquals(2, maxBranching.get(3).intValue());
@@ -287,7 +288,7 @@ public class ChuLiuEdmondsTest {
 		  \-------^
 		     40
 		 */
-		maxBranching = weightedSpanningTrees.get(1).val;
+		maxBranching = weightedSpanningTrees.get(1).val.parents;
 		assertEquals(3, maxBranching.get(1).intValue());
 		assertEquals(3, maxBranching.get(2).intValue());
 		assertEquals(0, maxBranching.get(3).intValue());
@@ -296,13 +297,13 @@ public class ChuLiuEdmondsTest {
 
 	}
 
-	private void printTree(Weighted<Map<Integer, Integer>> weightedSpanningTree) {
+	private void printTree(Weighted<Arborescence> weightedSpanningTree) {
 		System.out.println(showTree(weightedSpanningTree));
 	}
 
-	private String showTree(Weighted<Map<Integer, Integer>> weightedSpanningTree) {
+	private String showTree(Weighted<Arborescence> weightedSpanningTree) {
 		List<String> lines = Lists.newArrayList();
-		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		for (int to = 1; to <= maxBranching.size(); to++) {
 			lines.add(maxBranching.get(to) + " -> " + to);
 		}
@@ -326,10 +327,10 @@ public class ChuLiuEdmondsTest {
 				{NINF, NINF, NINF, NINF, NINF, NINF, NINF, 9,    NINF, NINF, NINF}, // /        /            /
 				{NINF, NINF, NINF, 3   , NINF, NINF, NINF, NINF, NINF, NINF, NINF}, //                      /
 		};
-		final Weighted<Map<Integer, Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
+		final Weighted<Arborescence> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(weights, 0);
 		printTree(weightedSpanningTree);
 
-		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val;
+		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEdgesSumToScore(weights, weightedSpanningTree);
 		assertEquals(3, maxBranching.get(1).intValue());
 		assertEquals(8, maxBranching.get(2).intValue());
