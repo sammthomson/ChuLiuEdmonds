@@ -103,14 +103,17 @@ class EdgeQueueMap<V> {
 	}
 
 	public EdgeQueue merge(V component, Iterable<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge) {
-		EdgeQueue<V> result = EdgeQueue.create(component, partition);
+		final EdgeQueue<V> result = EdgeQueue.create(component, partition);
 		for (Pair<EdgeQueue<V>, Weighted<Edge<V>>> queueAndReplace : queuesToMerge) {
 			final EdgeQueue<V> queue = queueAndReplace.first;
 			final Weighted<Edge<V>> replace = queueAndReplace.second;
 			for (ExclusiveEdge<V> wEdgeAndExcluded : queue.edges) {
 				final List<Edge<V>> replaces = wEdgeAndExcluded.excluded;
 				replaces.add(replace.val);
-				result.addEdge(ExclusiveEdge.of(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
+				result.addEdge(ExclusiveEdge.of(
+						wEdgeAndExcluded.edge,
+						replaces,
+						wEdgeAndExcluded.weight - replace.weight));
 			}
 		}
 		queueByDestination.put(component, result);
