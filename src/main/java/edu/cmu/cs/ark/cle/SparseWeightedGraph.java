@@ -11,7 +11,7 @@ import java.util.Set;
 /**
  * @author sthomson@cs.cmu.edu
  */
-public class SparseWeightedGraph<V> implements WeightedGraph<V> {
+public class SparseWeightedGraph<V> extends WeightedGraph<V> {
 	final private Set<V> nodes;
 	final private Map<V, Map<V, Double>> outgoingEdges;
 	final private Map<V, Map<V, Weighted<Edge<V>>>> incomingEdges;

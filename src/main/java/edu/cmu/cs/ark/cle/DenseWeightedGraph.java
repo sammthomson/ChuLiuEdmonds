@@ -13,7 +13,7 @@ import static com.google.common.collect.Range.closedOpen;
 /**
  * @author sthomson@cs.cmu.edu
  */
-public class DenseWeightedGraph<V> implements WeightedGraph<V> {
+public class DenseWeightedGraph<V> extends WeightedGraph<V> {
 	final private ArrayList<V> nodes;
 	final private Map<V, Integer> indexOf;
 	final private double[][] weights;

@@ -5,8 +5,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 
-import java.util.*;
+import java.util.List;
+import java.util.PriorityQueue;
+import java.util.Queue;
+import java.util.Set;
 
+import static com.google.common.base.Predicates.and;
+import static com.google.common.base.Predicates.not;
 import static com.google.common.collect.ImmutableSet.copyOf;
 import static com.google.common.collect.Iterables.concat;
 import static edu.cmu.cs.ark.cle.ChuLiuEdmonds.PartialSolution;
@@ -20,21 +25,27 @@ import static java.util.Collections.singleton;
  * @author sthomson@cs.cmu.edu, swabha@cs.cmu.edu
  */
 public class KBestArborescences {
+	/** Find the k-best arborescences of `graph`, rooted in the given node `root`. */
+	public static <V> List<Weighted<Arborescence<V>>> getKBestArborescences(WeightedGraph<V> graph, V root, int k) {
+		// remove all edges incoming to `root`. resulting arborescence is then forced to be rooted at `root`.
+		return getKBestArborescences(graph.filterEdges(not(Edge.hasDestination(root))), k);
+	}
+
 	/**
-	 * Find the k-best arborescences of `graph`, rooted in the given node `root`.
+	 * Find the k-best arborescences of `graph`.
 	 * Equivalent to the RANK function in Camerini et al. 1980.
 	 */
-	public static <V> List<Weighted<Arborescence<V>>> getKBestArborescences(WeightedGraph<V> graph, V root, int k) {
+	private static <V> List<Weighted<Arborescence<V>>> getKBestArborescences(WeightedGraph<V> graph, int k) {
 		final List<Weighted<Arborescence<V>>> results = Lists.newArrayList();
 		if (k < 1) return results;
 		// 1-best
-		final Weighted<Arborescence<V>> best = ChuLiuEdmonds.getMaxArborescence(graph, root);
+		final Weighted<Arborescence<V>> best = ChuLiuEdmonds.getMaxArborescence(graph);
 		results.add(best);
 		if (k < 2) return results;
 		final PriorityQueue<Weighted<SubsetOfSolutions<V>>> queue = Queues.newPriorityQueue();
 		// find the edge you need to ban to get the 2nd best
 		final Set<Edge<V>> empty = ImmutableSet.of();
-		queue.addAll(scoreSubsetOfSolutions(graph, root, empty, empty, best).asSet());
+		queue.addAll(scoreSubsetOfSolutions(graph, empty, empty, best).asSet());
 		for (int j = 2; j <= k && !queue.isEmpty(); j++) {
 			final Weighted<SubsetOfSolutions<V>> wItem = queue.poll();
 			final SubsetOfSolutions<V> item = wItem.val;
@@ -42,38 +53,37 @@ public class KBestArborescences {
 			// We have already pre-calculated that `jthBest` will not contain `edgeToBan`
 			final Set<Edge<V>> newBanned = copyOf(concat(item.banned, singleton(item.edgeToBan)));
 			final Weighted<Arborescence<V>> jthBest =
-					ChuLiuEdmonds.getMaxArborescence(graph, root, item.required, newBanned);
+					ChuLiuEdmonds.getMaxArborescence(graph, item.required, newBanned);
 			assert jthBest.weight == wItem.weight;
 			results.add(jthBest);
 			// subset of solutions in item that *don't* have `edgeToBan`, except `jthBest`
-			queue.addAll(scoreSubsetOfSolutions(graph, root, item.required, newBanned, jthBest).asSet());
+			queue.addAll(scoreSubsetOfSolutions(graph, item.required, newBanned, jthBest).asSet());
 			// subset of solutions in item that *do* have `edgeToBan`, except `bestArborescence`
 			final Set<Edge<V>> newRequired = copyOf(concat(item.required, singleton(item.edgeToBan)));
-			queue.addAll(scoreSubsetOfSolutions(graph, root, newRequired, item.banned, item.bestArborescence).asSet());
+			queue.addAll(scoreSubsetOfSolutions(graph, newRequired, item.banned, item.bestArborescence).asSet());
 		}
 		return results;
 	}
 
 	static <V> Optional<Weighted<SubsetOfSolutions<V>>>
 			scoreSubsetOfSolutions(WeightedGraph<V> graph,
-								   V root,
 								   Set<Edge<V>> required,
 								   Set<Edge<V>> banned,
 								   Weighted<Arborescence<V>> wBestArborescence) {
+		final WeightedGraph<V> filtered =
+				graph.filterEdges(and(not(Edge.competesWith(required)), not(Edge.isIn(banned))));
 		final Optional<Pair<Edge<V>, Double>> oEdgeToBanAndDiff =
-				getNextBestArborescence(graph, root, required, banned, wBestArborescence.val);
+				getNextBestArborescence(filtered, wBestArborescence.val);
 		if (oEdgeToBanAndDiff.isPresent()) {
 			final Pair<Edge<V>, Double> edgeToBanAndDiff = oEdgeToBanAndDiff.get();
-			return Optional.of(
-					weighted(
+			return Optional.of(weighted(
 							new SubsetOfSolutions<V>(
 									edgeToBanAndDiff.first,
 									wBestArborescence,
 									required,
 									banned),
 							wBestArborescence.weight - edgeToBanAndDiff.second
-					)
-			);
+					));
 		} else {
 			return Optional.absent();
 		}
@@ -85,12 +95,9 @@ public class KBestArborescences {
 	 * Corresponds to the NEXT function in Camerini et al. 1980
 	 */
 	private static <V> Optional<Pair<Edge<V>, Double>> getNextBestArborescence(WeightedGraph<V> graph,
-																			   V root,
-																			   Set<Edge<V>> required,
-																			   Set<Edge<V>> banned,
 																			   Arborescence<V> bestArborescence) {
-		final PartialSolution<V> partialSolution = PartialSolution.create(graph, root, required, banned);
-
+		final PartialSolution<V> partialSolution =
+				PartialSolution.initialize(graph.filterEdges(not(Edge.<V>isAutoCycle())));
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
 		final Queue<V> componentsWithNoInEdges = Lists.newLinkedList(graph.getNodes());
 
@@ -105,8 +112,7 @@ public class KBestArborescences {
 			final Optional<ExclusiveEdge<V>> oMaxInEdge = partialSolution.popBestEdge(component, bestArborescence);
 			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
 			final ExclusiveEdge<V> maxInEdge = oMaxInEdge.get();
-			if (bestArborescence.parents.get(maxInEdge.edge.destination).equals(maxInEdge.edge.source)
-					&& !required.contains(maxInEdge.edge)) {
+			if (bestArborescence.parents.get(maxInEdge.edge.destination).equals(maxInEdge.edge.source)) {
 				final Optional<ExclusiveEdge<V>> oAlternativeEdge =
 						seek(maxInEdge, bestArborescence, partialSolution.unseenIncomingEdges.queueByDestination.get(component));
 				if (oAlternativeEdge.isPresent()) {

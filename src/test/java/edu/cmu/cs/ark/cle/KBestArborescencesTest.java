@@ -109,7 +109,7 @@ public class KBestArborescencesTest {
 		// get the best tree A(1)
 		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> oItem =
-				KBestArborescences.scoreSubsetOfSolutions(graph, 0, empty, empty, best);
+				KBestArborescences.scoreSubsetOfSolutions(graph, empty, empty, best);
 		assertTrue(oItem.isPresent());
 		final KBestArborescences.SubsetOfSolutions<Integer> item = oItem.get().val;
 		assertEquals(Edge.from(0).to(1), item.edgeToBan);
@@ -121,7 +121,7 @@ public class KBestArborescencesTest {
 		// get the best tree A(1)
 		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> oItem =
-				KBestArborescences.scoreSubsetOfSolutions(graph, 0, ImmutableSet.of(Edge.from(0).to(1)), empty, best);
+				KBestArborescences.scoreSubsetOfSolutions(graph, ImmutableSet.of(Edge.from(0).to(1)), empty, best);
 		assertTrue(oItem.isPresent());
 		final KBestArborescences.SubsetOfSolutions<Integer> item = oItem.get().val;
 		assertEquals(Edge.from(2).to(3), item.edgeToBan);
@@ -137,7 +137,7 @@ public class KBestArborescencesTest {
 		});
 		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> pair =
-				KBestArborescences.scoreSubsetOfSolutions(graph, 0, empty, empty, best);
+				KBestArborescences.scoreSubsetOfSolutions(graph, empty, empty, best);
 		assertFalse(pair.isPresent());
 	}
 }

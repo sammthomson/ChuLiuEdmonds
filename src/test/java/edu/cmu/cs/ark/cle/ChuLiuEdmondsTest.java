@@ -40,10 +40,6 @@ public class ChuLiuEdmondsTest {
 		assertEquals(sumOfWeights, bestTree.weight, DELTA);
 	}
 
-	private <V> void printTree(Weighted<Arborescence<V>> weightedSpanningTree) {
-		System.out.println(showTree(weightedSpanningTree));
-	}
-
 	static <V> String showTree(Weighted<Arborescence<V>> weightedSpanningTree) {
 		List<String> lines = Lists.newArrayList();
 		final Map<V, V> maxBranching = weightedSpanningTree.val.parents;
@@ -77,8 +73,8 @@ public class ChuLiuEdmondsTest {
 		};
 		final DenseWeightedGraph<Integer> graph = DenseWeightedGraph.from(weights);
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-		printTree(weightedSpanningTree);
-		/*
+//		System.out.println(showTree(weightedSpanningTree));
+	/*
 		root
 		(0)           (1)
 		 |             ^
@@ -102,7 +98,6 @@ public class ChuLiuEdmondsTest {
 	public void testRequiredAndBannedEdges() {
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(
 				graph,
-				0,
 				ImmutableSet.of(Edge.from(0).to(1)),
 				ImmutableSet.of(Edge.from(2).to(3)));
 		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
@@ -118,7 +113,6 @@ public class ChuLiuEdmondsTest {
 	public void testRequiredAndBannedEdges2() {
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(
 				graph,
-				0,
 				ImmutableSet.of(Edge.from(0).to(3), Edge.from(3).to(1)),
 				ImmutableSet.of(Edge.from(1).to(2))
 		);
@@ -152,7 +146,7 @@ public class ChuLiuEdmondsTest {
 				weighted(Edge.from(10).to(3), 3)
 		));
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-		printTree(weightedSpanningTree);
+//		System.out.println(showTree(weightedSpanningTree));
 
 		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEdgesSumToScore(graph, weightedSpanningTree);
