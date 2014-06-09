@@ -15,7 +15,7 @@ public class ExclusiveEdge<V> implements Comparable<ExclusiveEdge<V>> {
 	public final List<Edge<V>> excluded;
 	public final double weight;
 
-	public ExclusiveEdge(Edge<V> edge, List<Edge<V>> excluded, double weight) {
+	private ExclusiveEdge(Edge<V> edge, List<Edge<V>> excluded, double weight) {
 		this.edge = edge;
 		this.excluded = excluded;
 		this.weight = weight;
@@ -26,7 +26,7 @@ public class ExclusiveEdge<V> implements Comparable<ExclusiveEdge<V>> {
 	}
 
 	public static <T> ExclusiveEdge<T> of(Edge<T> edge, double weight) {
-		return new ExclusiveEdge<T>(edge, ImmutableList.<Edge<T>>of(), weight);
+		return ExclusiveEdge.of(edge, ImmutableList.<Edge<T>>of(), weight);
 	}
 
 	@Override public int compareTo(ExclusiveEdge<V> exclusiveEdge) {

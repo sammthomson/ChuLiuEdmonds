@@ -9,4 +9,6 @@ public interface WeightedGraph<V> {
 	public Collection<V> getNodes();
 
 	public double getWeightOf(V source, V dest);
+
+	Collection<Weighted<Edge<V>>> getIncomingEdges(V destinationNode);
 }

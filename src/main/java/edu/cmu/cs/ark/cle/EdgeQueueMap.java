@@ -87,13 +87,13 @@ class EdgeQueueMap<V> {
 		this.queueByDestination = Maps.newHashMap();
 	}
 
-	public void addEdge(Edge<V> edge, double weight) {
-		final V destination = partition.componentOf(edge.destination);
+	public void addEdge(Weighted<Edge<V>> edge) {
+		final V destination = partition.componentOf(edge.val.destination);
 		if (!queueByDestination.containsKey(destination)) {
 			queueByDestination.put(destination, EdgeQueue.create(destination, partition));
 		}
 		final List<Edge<V>> replaces = Lists.newLinkedList();
-		queueByDestination.get(destination).addEdge(new ExclusiveEdge<V>(edge, replaces, weight));
+		queueByDestination.get(destination).addEdge(ExclusiveEdge.of(edge.val, replaces, edge.weight));
 	}
 
 	/** Always breaks ties in favor of edges in best */
@@ -110,7 +110,7 @@ class EdgeQueueMap<V> {
 			for (ExclusiveEdge<V> wEdgeAndExcluded : queue.edges) {
 				final List<Edge<V>> replaces = wEdgeAndExcluded.excluded;
 				replaces.add(replace.val);
-				result.addEdge(new ExclusiveEdge<V>(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
+				result.addEdge(ExclusiveEdge.of(wEdgeAndExcluded.edge, replaces, wEdgeAndExcluded.weight - replace.weight));
 			}
 		}
 		queueByDestination.put(component, result);

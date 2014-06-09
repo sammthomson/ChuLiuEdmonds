@@ -65,7 +65,7 @@ public class ChuLiuEdmondsTest {
 				{NINF, NINF, NINF, NINF, NINF},
 		};
 		final DenseWeightedGraph<Integer> graph = DenseWeightedGraph.from(weights);
-		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
+		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		printTree(weightedSpanningTree);
 		/*
 		root
@@ -90,7 +90,7 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testGetKBest() {
 		final List<Weighted<Arborescence<Integer>>> weightedSpanningTrees =
-				ChuLiuEdmonds.getKBestSpanningTrees(graph, 0, 4);
+				ChuLiuEdmonds.getKBestArborescences(graph, 0, 4);
 
 		Weighted<Arborescence<Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
 		Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
@@ -128,7 +128,7 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testGetLotsOfKBest() {
 		final int k = 100;
-		final List<Weighted<Arborescence<Integer>>> kBestSpanningTrees = ChuLiuEdmonds.getKBestSpanningTrees(graph, 0, k);
+		final List<Weighted<Arborescence<Integer>>> kBestSpanningTrees = ChuLiuEdmonds.getKBestArborescences(graph, 0, k);
 		final int size = kBestSpanningTrees.size();
 		// make sure there are no more than k of them
 		assertTrue(size <= k);
@@ -146,7 +146,7 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testSeekDoesntReturnAncestor() {
-		final Weighted<Arborescence<Integer>> bestArborescence = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
+		final Weighted<Arborescence<Integer>> bestArborescence = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final ExclusiveEdge<Integer> maxInEdge = ExclusiveEdge.of(Edge.from(1).to(2), 11.0);
 		final EdgeQueue<Integer> edgeQueue = EdgeQueue.create(maxInEdge.edge.destination, Partition.singletons(graph.getNodes()));
 		edgeQueue.addEdge(ExclusiveEdge.of(Edge.from(0).to(2), 1.0));
@@ -178,9 +178,9 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testNext() {
 		// get the best tree A(1)
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
+		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<SubsetOfSolutions<Integer>> oItem =
-				ChuLiuEdmonds.getNextBest(graph, 0, empty, empty, best);
+				ChuLiuEdmonds.scoreSubsetOfSolutions(graph, 0, empty, empty, best);
 		assertTrue(oItem.isPresent());
 		final SubsetOfSolutions<Integer> item = oItem.get();
 		assertEquals(Edge.from(0).to(1), item.edgeToBan);
@@ -190,9 +190,9 @@ public class ChuLiuEdmondsTest {
 	@Test
 	public void testNextWithRequiredEdges() {
 		// get the best tree A(1)
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
+		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<SubsetOfSolutions<Integer>> oItem =
-				ChuLiuEdmonds.getNextBest(graph, 0, ImmutableSet.of(Edge.from(0).to(1)), empty, best);
+				ChuLiuEdmonds.scoreSubsetOfSolutions(graph, 0, ImmutableSet.of(Edge.from(0).to(1)), empty, best);
 		assertTrue(oItem.isPresent());
 		final SubsetOfSolutions<Integer> item = oItem.get();
 		assertEquals(Edge.from(2).to(3), item.edgeToBan);
@@ -206,14 +206,14 @@ public class ChuLiuEdmondsTest {
 				{NINF, 1.0},
 				{NINF, NINF}
 		});
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
-		Optional<SubsetOfSolutions<Integer>> pair = ChuLiuEdmonds.getNextBest(graph, 0, empty, empty, best);
+		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		Optional<SubsetOfSolutions<Integer>> pair = ChuLiuEdmonds.scoreSubsetOfSolutions(graph, 0, empty, empty, best);
 		assertFalse(pair.isPresent());
 	}
 
 	@Test
 	public void testRequiredAndBannedEdges() {
-		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(
+		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(
 				graph,
 				0,
 				ImmutableSet.of(Edge.from(0).to(1)),
@@ -229,7 +229,7 @@ public class ChuLiuEdmondsTest {
 
 	@Test
 	public void testRequiredAndBannedEdges2() {
-		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(
+		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(
 				graph,
 				0,
 				ImmutableSet.of(Edge.from(0).to(3), Edge.from(3).to(1)),
@@ -278,7 +278,7 @@ public class ChuLiuEdmondsTest {
 				weighted(Edge.from(9).to(7), 9),
 				weighted(Edge.from(10).to(3), 3)
 		));
-		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxSpanningTree(graph, 0);
+		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		printTree(weightedSpanningTree);
 
 		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;

@@ -14,11 +14,11 @@ import java.util.Set;
 public class SparseWeightedGraph<V> implements WeightedGraph<V> {
 	final private Set<V> nodes;
 	final private Map<V, Map<V, Double>> outgoingEdges;
-	final private Map<V, Map<V, Double>> incomingEdges;
+	final private Map<V, Map<V, Weighted<Edge<V>>>> incomingEdges;
 
 	private SparseWeightedGraph(Set<V> nodes,
 								Map<V, Map<V, Double>> outgoingEdges,
-								Map<V, Map<V, Double>> incomingEdges) {
+								Map<V, Map<V, Weighted<Edge<V>>>> incomingEdges) {
 		this.nodes = nodes;
 		this.outgoingEdges = outgoingEdges;
 		this.incomingEdges = incomingEdges;
@@ -26,16 +26,16 @@ public class SparseWeightedGraph<V> implements WeightedGraph<V> {
 
 	public static <T> SparseWeightedGraph<T> from(Iterable<T> nodes, Iterable<Weighted<Edge<T>>> edges) {
 		final Map<T, Map<T, Double>> outgoingEdges = Maps.newHashMap();
-		final Map<T, Map<T, Double>> incomingEdges = Maps.newHashMap();
+		final Map<T, Map<T, Weighted<Edge<T>>>> incomingEdges = Maps.newHashMap();
 		for (Weighted<Edge<T>> edge : edges) {
 			if (!outgoingEdges.containsKey(edge.val.source)) {
 				outgoingEdges.put(edge.val.source, Maps.<T, Double>newHashMap());
 			}
 			outgoingEdges.get(edge.val.source).put(edge.val.destination, edge.weight);
 			if (!incomingEdges.containsKey(edge.val.destination)) {
-				incomingEdges.put(edge.val.destination, Maps.<T, Double>newHashMap());
+				incomingEdges.put(edge.val.destination, Maps.<T, Weighted<Edge<T>>>newHashMap());
 			}
-			incomingEdges.get(edge.val.destination).put(edge.val.source, edge.weight);
+			incomingEdges.get(edge.val.destination).put(edge.val.source, edge);
 		}
 		return new SparseWeightedGraph<T>(ImmutableSet.copyOf(nodes), outgoingEdges, incomingEdges);
 	}
@@ -60,5 +60,11 @@ public class SparseWeightedGraph<V> implements WeightedGraph<V> {
 		final Map<V, Double> outEdges = outgoingEdges.get(source);
 		if (!outEdges.containsKey(dest)) return Double.NEGATIVE_INFINITY;
 		return outEdges.get(dest);
+	}
+
+	@Override
+	public Collection<Weighted<Edge<V>>> getIncomingEdges(V destinationNode) {
+		if (!incomingEdges.containsKey(destinationNode)) return ImmutableSet.of();
+		return incomingEdges.get(destinationNode).values();
 	}
 }

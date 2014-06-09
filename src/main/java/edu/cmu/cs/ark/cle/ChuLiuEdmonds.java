@@ -25,9 +25,9 @@ public class ChuLiuEdmonds {
 	/** Represents the subgraph that gets iteratively built up in the CLE algorithm. */
 	private static class PartialSolution<V> {
 		// Partition representing the strongly connected components (SCCs).
-		private Partition<V> stronglyConnected;
+		private final Partition<V> stronglyConnected;
 		// Partition representing the weakly connected components (WCCs).
-		private Partition<V> weaklyConnected;
+		private final Partition<V> weaklyConnected;
 		// An invariant of the CLE algorithm is that each SCC always has at most one incoming edge.
 		// You can think of these edges as implicitly defining a graph with SCCs as nodes.
 		private final Map<V, Weighted<Edge<V>>> incomingEdgeByScc;
@@ -40,45 +40,88 @@ public class ChuLiuEdmonds {
 		// edge weights are adjusted as we go to take into account the fact that we have an extra edge in each cycle
 		private double score;
 
-		public PartialSolution(WeightedGraph<V> graph, V root, Set<Edge<V>> required, Set<Edge<V>> banned) {
-			stronglyConnected = Partition.singletons(graph.getNodes());
-			weaklyConnected = Partition.singletons(graph.getNodes());
-			incomingEdgeByScc = Maps.newHashMap();
-			edgesAndWhatTheyExclude = Lists.newLinkedList();
-			unseenIncomingEdges = getEdgesByDestination(graph, root, required, banned);
-			score = 0.0;
+		private PartialSolution(Partition<V> stronglyConnected,
+								Partition<V> weaklyConnected,
+								Map<V, Weighted<Edge<V>>> incomingEdgeByScc,
+								LinkedList<ExclusiveEdge<V>> edgesAndWhatTheyExclude,
+								EdgeQueueMap<V> unseenIncomingEdges,
+								double score) {
+			this.stronglyConnected = stronglyConnected;
+			this.weaklyConnected = weaklyConnected;
+			this.incomingEdgeByScc = incomingEdgeByScc;
+			this.edgesAndWhatTheyExclude = edgesAndWhatTheyExclude;
+			this.unseenIncomingEdges = unseenIncomingEdges;
+			this.score = score;
+		}
+
+		public static <T> PartialSolution<T> create(WeightedGraph<T> graph, Set<Edge<T>> required, Set<Edge<T>> banned) {
+			final Partition<T> stronglyConnected = Partition.singletons(graph.getNodes());
+			return new PartialSolution<T>(
+					stronglyConnected,
+					Partition.singletons(graph.getNodes()),
+					Maps.<T, Weighted<Edge<T>>>newHashMap(),
+					Lists.<ExclusiveEdge<T>>newLinkedList(),
+					getEdgesByDestination(graph, required, banned, stronglyConnected),
+					0.0
+			);
+		}
+
+		public static <T> PartialSolution<T> create(WeightedGraph<T> graph, T root, Set<Edge<T>> required, Set<Edge<T>> banned) {
+			final Partition<T> stronglyConnected = Partition.singletons(graph.getNodes());
+			return new PartialSolution<T>(
+					stronglyConnected,
+					Partition.singletons(graph.getNodes()),
+					Maps.<T, Weighted<Edge<T>>>newHashMap(),
+					Lists.<ExclusiveEdge<T>>newLinkedList(),
+					getEdgesByDestination(graph, root, required, banned, stronglyConnected),
+					0.0
+			);
+		}
+
+		public Set<V> getNodes() {
+			return stronglyConnected.getNodes();
 		}
 
 		/** Groups edges by their destination component. O(n^2) */
-		private EdgeQueueMap<V> getEdgesByDestination(WeightedGraph<V> graph,
-													  V root,
-													  Set<Edge<V>> required,
-													  Set<Edge<V>> banned) {
-			final Function<Edge<V>, V> byDest = new Function<Edge<V>, V>() {
-				@Override public V apply(Edge<V> input) { return input.destination; }
+		private static <T> EdgeQueueMap<T> getEdgesByDestination(WeightedGraph<T> graph,
+																 T root,
+																 Set<Edge<T>> required,
+																 Set<Edge<T>> banned,
+																 Partition<T> stronglyConnected) {
+			final EdgeQueueMap<T> incomingEdges = getEdgesByDestination(graph, required, banned, stronglyConnected);
+			// Throw out incoming edges for the root node.
+			incomingEdges.queueByDestination.remove(root);
+			return incomingEdges;
+		}
+
+		private static <T> EdgeQueueMap<T> getEdgesByDestination(WeightedGraph<T> graph,
+																 Set<Edge<T>> required,
+																 Set<Edge<T>> banned,
+																 Partition<T> stronglyConnected) {
+			final Function<Edge<T>, T> byDest = new Function<Edge<T>, T>() {
+				@Override public T apply(Edge<T> input) { return input.destination; }
 			};
-			final ListMultimap<V, Edge<V>> requiredByDestination = Multimaps.index(required, byDest);
-			final EdgeQueueMap<V> incomingEdges = new EdgeQueueMap<V>(stronglyConnected);
-			for (V destinationNode : graph.getNodes()) {
-				if(!destinationNode.equals(root)) { // Throw out incoming edges for the root node.
-					final List<Edge<V>> requiredEdgesForDest = requiredByDestination.get(destinationNode);
-					final Optional<V> requiredDest = requiredEdgesForDest.isEmpty() ?
-							Optional.<V>absent() :
-							Optional.of(requiredEdgesForDest.get(0).source);
-					for (V sourceNode : graph.getNodes()) {
-						if (sourceNode.equals(destinationNode)) continue; // Skip autocycle edges
-						if (requiredDest.isPresent() && sourceNode != requiredDest.get()) {
-							// Skip any edge that might compete with a required edge
-							continue;
-						}
-						if (banned.contains(Edge.from(sourceNode).to(destinationNode))) {
-							// Skip banned edges
-							continue;
-						}
-						final double weight = graph.getWeightOf(sourceNode, destinationNode);
-						if (weight != Double.NEGATIVE_INFINITY) {
-							incomingEdges.addEdge(Edge.from(sourceNode).to(destinationNode), weight);
-						}
+			final ListMultimap<T, Edge<T>> requiredByDestination = Multimaps.index(required, byDest);
+			final EdgeQueueMap<T> incomingEdges = new EdgeQueueMap<T>(stronglyConnected);
+			for (T destinationNode : graph.getNodes()) {
+				final List<Edge<T>> requiredEdgesForDest = requiredByDestination.get(destinationNode);
+				final Optional<T> requiredDest = requiredEdgesForDest.isEmpty() ?
+						Optional.<T>absent() :
+						Optional.of(requiredEdgesForDest.get(0).source);
+				for (Weighted<Edge<T>> inEdge : graph.getIncomingEdges(destinationNode)) {
+					T sourceNode = inEdge.val.source;
+					if (sourceNode.equals(destinationNode)) continue; // Skip autocycle edges
+					if (requiredDest.isPresent() && !sourceNode.equals(requiredDest.get())) {
+						// Skip any edge that might compete with a required edge
+						continue;
+					}
+					if (banned.contains(Edge.from(sourceNode).to(destinationNode))) {
+						// Skip banned edges
+						continue;
+					}
+					final double weight = graph.getWeightOf(sourceNode, destinationNode);
+					if (weight != Double.NEGATIVE_INFINITY) {
+						incomingEdges.addEdge(inEdge);
 					}
 				}
 			}
@@ -152,13 +195,13 @@ public class ChuLiuEdmonds {
 		}
 
 		/**
-		 * Gets the optimal spanning tree.
+		 * Recovers the optimal arborescence.
 		 *
 		 * Each SCC can only have 1 edge entering it: the edge that we added most recently.
 		 * So we work backwards, adding edges unless they conflict with edges we've already added.
-		 * O(n log n) (number of edges in subgraph * number of partitions in our history)
+		 * Runtime is O(n^2) in the worst case.
 		 */
-		private Weighted<Arborescence<V>> getBestArborescence() {
+		private Weighted<Arborescence<V>> recoverBestArborescence() {
 			final Map<V, V> parents = Maps.newHashMap();
 			final Set<Edge> excluded = Sets.newHashSet();
 			// start with the most recent
@@ -177,7 +220,7 @@ public class ChuLiuEdmonds {
 			return popBestEdge(component, Arborescence.<V>empty());
 		}
 
-		/** Always breaks ties in favor of edges in best */
+		/** Always breaks ties in favor of edges in `best` */
 		public Optional<ExclusiveEdge<V>> popBestEdge(V component, Arborescence<V> best) {
 			return unseenIncomingEdges.popBestEdge(component, best);
 		}
@@ -186,9 +229,12 @@ public class ChuLiuEdmonds {
 	/**
 	 * Represents a subset of all possible spanning arborescences: those that contain all of `required` and
 	 * none of `banned`.
-	 * Contains `bestArborescence`, the best arborescence in this subset, as well as `weightOfNextBest`,
-	 * the weight of the second best, and `edgeToBan`,the edge you need to ban in order to get the
-	 * second best.
+	 * `bestArborescence` is the best arborescence in this subset.
+	 * `weightOfNextBest` is the score of the second best.
+	 * `edgeToBan`,the edge you need to ban in order to get the second best (i.e. the next second will be the
+	 * 1-best arborescence with all of `required`, and none of `banned` U {`edgeToBan`}..
+	 * Comparison is on `weightOfNextBest`. The assumption is that `bestArborescence` has already been added
+	 * to the k-best list, and we're trying to decide whether the next best in this subset is k+1-best overall.
 	 */
 	static class SubsetOfSolutions<V> implements Comparable<SubsetOfSolutions<V>> {
 		final double weightOfNextBest;
@@ -217,40 +263,75 @@ public class ChuLiuEdmonds {
 
 
 	/**
-	 * Find an optimal branching of the given graph, rooted in the given node.
-	 * This is the main entry point for the algorithm.
+	 * Find an optimal arborescence of the given graph.
 	 */
-	public static <V> Weighted<Arborescence<V>> getMaxSpanningTree(WeightedGraph<V> graph, V root) {
+	public static <V> Weighted<Arborescence<V>> getMaxArborescence(WeightedGraph<V> graph) {
 		final Set<Edge<V>> empty = ImmutableSet.of();
-		return getMaxSpanningTree(graph, root, empty, empty);
+		return getMaxArborescence(PartialSolution.create(graph, empty, empty));
 	}
 
-	public static <V> Weighted<Arborescence<V>> getMaxSpanningTree(WeightedGraph<V> graph,
-																   V root,
-																   Set<Edge<V>> required,
-																   Set<Edge<V>> banned) {
-		// result
-		final PartialSolution<V> partialSolution = new PartialSolution<V>(graph, root, required, banned);
+	/**
+	 * Find an optimal arborescence of the given graph, rooted in the given node.
+	 */
+	public static <V> Weighted<Arborescence<V>> getMaxArborescence(WeightedGraph<V> graph,
+																   V root) {
+		final Set<Edge<V>> empty = ImmutableSet.of();
+		return getMaxArborescence(graph, root, empty, empty);
+	}
 
+	static <V> Weighted<Arborescence<V>> getMaxArborescence(WeightedGraph<V> graph,
+															V root,
+															Set<Edge<V>> required,
+															Set<Edge<V>> banned) {
+		return getMaxArborescence(PartialSolution.create(graph, root, required, banned));
+	}
+
+	static <V> Weighted<Arborescence<V>> getMaxArborescence(WeightedGraph<V> graph,
+															Set<Edge<V>> required,
+															Set<Edge<V>> banned) {
+		return getMaxArborescence(PartialSolution.create(graph, required, banned));
+	}
+
+	private static <V> Weighted<Arborescence<V>> getMaxArborescence(PartialSolution<V> partialSolution) {
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
-		final Queue<V> componentsWithNoInEdges = Lists.newLinkedList(graph.getNodes());
+		final Queue<V> componentsWithNoInEdges = Lists.newLinkedList(partialSolution.getNodes());
 
 		// Work our way through all componentsWithNoInEdges, in no particular order
 		while (!componentsWithNoInEdges.isEmpty()) {
 			final V component = componentsWithNoInEdges.poll();
-			// find maximum edge entering 'component' from the outside.
+			// find maximum edge entering 'component' from outside 'component'.
 			final Optional<ExclusiveEdge<V>> oMaxInEdge = partialSolution.popBestEdge(component);
 			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
 			final ExclusiveEdge<V> maxInEdge = oMaxInEdge.get();
 			// add the new edge to subgraph, merging SCCs if necessary
 			final Optional<V> newComponent = partialSolution.addEdge(maxInEdge);
 			if (newComponent.isPresent()) {
-				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
+				// addEdge created a cycle/component, which means the new component doesn't have any incoming edges
 				componentsWithNoInEdges.add(newComponent.get());
 			}
 		}
 		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
-		return partialSolution.getBestArborescence();
+		return partialSolution.recoverBestArborescence();
+	}
+
+	static <V> Optional<SubsetOfSolutions<V>> scoreSubsetOfSolutions(WeightedGraph<V> graph,
+																	 V root,
+																	 Set<Edge<V>> required,
+																	 Set<Edge<V>> banned,
+																	 Weighted<Arborescence<V>> wBestArborescence) {
+		final Optional<Pair<Edge<V>, Double>> oEdgeToBanAndDiff =
+				getNextBestArborescence(graph, root, required, banned, wBestArborescence.val);
+		if (oEdgeToBanAndDiff.isPresent()) {
+			final Pair<Edge<V>, Double> edgeToBanAndDiff = oEdgeToBanAndDiff.get();
+			return Optional.of(new SubsetOfSolutions<V>(
+					wBestArborescence.weight - edgeToBanAndDiff.second,
+					edgeToBanAndDiff.first,
+					wBestArborescence,
+					required,
+					banned));
+		} else {
+			return Optional.absent();
+		}
 	}
 
 	/**
@@ -258,14 +339,12 @@ public class ChuLiuEdmonds {
 	 * second best solution will be)
 	 * Corresponds to the NEXT function in Camerini et al. 1980
 	 */
-	public static <V> Optional<SubsetOfSolutions<V>> getNextBest(WeightedGraph<V> graph,
-																 V root,
-																 Set<Edge<V>> required,
-																 Set<Edge<V>> banned,
-																 Weighted<Arborescence<V>> wBestArborescence) {
-		final Arborescence<V> bestArborescence = wBestArborescence.val;
-		// result
-		final PartialSolution<V> partialSolution = new PartialSolution<V>(graph, root, required, banned);
+	private static <V> Optional<Pair<Edge<V>, Double>> getNextBestArborescence(WeightedGraph<V> graph,
+																			   V root,
+																			   Set<Edge<V>> required,
+																			   Set<Edge<V>> banned,
+																			   Arborescence<V> bestArborescence) {
+		final PartialSolution<V> partialSolution = PartialSolution.create(graph, root, required, banned);
 
 		// In the beginning, subgraph has no edges, so no SCC has in-edges.
 		final Queue<V> componentsWithNoInEdges = Lists.newLinkedList(graph.getNodes());
@@ -300,15 +379,8 @@ public class ChuLiuEdmonds {
 				componentsWithNoInEdges.add(newComponent.get());
 			}
 		}
-		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
 		if (bestEdgeToKickOut.isPresent()) {
-			return Optional.of(new SubsetOfSolutions<V>(
-					wBestArborescence.weight - bestDifference,
-					bestEdgeToKickOut.get().edge,
-					wBestArborescence,
-					required,
-					banned));
-//			return Optional.of(Pair.of(bestEdgeToKickOut.get().edge, bestDifference));
+			return Optional.of(Pair.of(bestEdgeToKickOut.get().edge, bestDifference));
 		} else {
 			return Optional.absent();
 		}
@@ -348,32 +420,32 @@ public class ChuLiuEdmonds {
 	 * Find the k-best arborescences of the given graph, rooted in the given node.
 	 * Equivalent to the RANK function in Camerini et al. 1980
 	 */
-	public static <V> List<Weighted<Arborescence<V>>> getKBestSpanningTrees(WeightedGraph<V> graph, V root, int k) {
+	public static <V> List<Weighted<Arborescence<V>>> getKBestArborescences(WeightedGraph<V> graph, V root, int k) {
 		final Set<Edge<V>> empty = ImmutableSet.of();
 		final List<Weighted<Arborescence<V>>> results = Lists.newArrayList();
 		if (k < 1) return results;
 		// 1-best
-		final Weighted<Arborescence<V>> best = getMaxSpanningTree(graph, root);
+		final Weighted<Arborescence<V>> best = getMaxArborescence(graph, root);
 		results.add(best);
 		if (k < 2) return results;
 		// reverseOrder b/c we want poll to give us the max
 		final PriorityQueue<SubsetOfSolutions<V>> queue =
 				new PriorityQueue<SubsetOfSolutions<V>>(3 * k, Collections.reverseOrder());
 		// find the edge you need to ban to get the 2nd best
-		queue.addAll(getNextBest(graph, root, empty, empty, best).asSet());
+		queue.addAll(scoreSubsetOfSolutions(graph, root, empty, empty, best).asSet());
 		for (int j = 2; j <= k && !queue.isEmpty(); j++) {
 			final SubsetOfSolutions<V> item = queue.poll();
 			// divide this subset into 2: things that have `edgeToBan`, and those that don't
 			// We have already pre-calculated that `jthBest` will not contain `edgeToBan`
 			final Set<Edge<V>> newBanned = copyOf(concat(item.banned, singleton(item.edgeToBan)));
-			final Weighted<Arborescence<V>> jthBest = getMaxSpanningTree(graph, root, item.required, newBanned);
+			final Weighted<Arborescence<V>> jthBest = getMaxArborescence(graph, root, item.required, newBanned);
 			assert jthBest.weight == item.weightOfNextBest;
 			results.add(jthBest);
 			// subset of solutions in item that *don't* have `edgeToBan`, except `jthBest`
-			queue.addAll(getNextBest(graph, root, item.required, newBanned, jthBest).asSet());
+			queue.addAll(scoreSubsetOfSolutions(graph, root, item.required, newBanned, jthBest).asSet());
 			// subset of solutions in item that *do* have `edgeToBan`, except `bestArborescence`
 			final Set<Edge<V>> newRequired = copyOf(concat(item.required, singleton(item.edgeToBan)));
-			queue.addAll(getNextBest(graph, root, newRequired, item.banned, item.bestArborescence).asSet());
+			queue.addAll(scoreSubsetOfSolutions(graph, root, newRequired, item.banned, item.bestArborescence).asSet());
 		}
 		return results;
 	}

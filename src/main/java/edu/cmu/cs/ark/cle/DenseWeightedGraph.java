@@ -1,11 +1,11 @@
 package edu.cmu.cs.ark.cle;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.*;
+import com.google.common.collect.ContiguousSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Map;
+import java.util.*;
 
 import static com.google.common.collect.DiscreteDomain.integers;
 import static com.google.common.collect.Range.closedOpen;
@@ -48,5 +48,16 @@ public class DenseWeightedGraph<V> implements WeightedGraph<V> {
 	public double getWeightOf(V source, V dest) {
 		if (!indexOf.containsKey(source) || !indexOf.containsKey(dest)) return Double.NEGATIVE_INFINITY;
 		return weights[indexOf.get(source)][indexOf.get(dest)];
+	}
+
+	@Override
+	public Collection<Weighted<Edge<V>>> getIncomingEdges(V destinationNode) {
+		if (!indexOf.containsKey(destinationNode)) return Collections.emptySet();
+		final int dest = indexOf.get(destinationNode);
+		List<Weighted<Edge<V>>> results = Lists.newArrayList();
+		for (int src = 0; src < nodes.size(); src++) {
+			results.add(Weighted.weighted(Edge.from(nodes.get(src)).to(destinationNode), weights[src][dest]));
+		}
+		return results;
 	}
 }
