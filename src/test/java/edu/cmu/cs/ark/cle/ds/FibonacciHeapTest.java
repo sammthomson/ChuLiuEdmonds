@@ -1,3 +1,23 @@
+/*
+* The contents of this file are subject to the terms of the Common Development
+* and Distribution License (the License). You may not use this file except in
+* compliance with the License.
+*
+* You can obtain a copy of the License at http://www.netbeans.org/cddl.html
+* or http://www.netbeans.org/cddl.txt.
+*
+* When distributing Covered Code, include this CDDL Header Notice in each file
+* and include the License file at http://www.netbeans.org/cddl.txt.
+* If applicable, add the following below the CDDL Header, with the fields
+* enclosed by brackets [] replaced by your own identifying information:
+* "Portions Copyrighted [year] [name of copyright owner]"
+*
+* The Original Software is GraphMaker. The Initial Developer of the Original
+* Software is Nathan L. Fiedler. Portions created by Nathan L. Fiedler
+* are Copyright (C) 2007-2010. All Rights Reserved.
+*
+* Contributor(s): Nathan L. Fiedler.
+*/
 package edu.cmu.cs.ark.cle.ds;
 
 import com.google.common.base.Optional;
@@ -13,7 +33,11 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
-
+/**
+ * These tests have been modified by Sam Thomson (sthomson@cs.cmu.edu)
+ * from the original tests by Nathan L. Fiedler
+ * https://github.com/nlfiedler/graphmaker/blob/990227c766a9891be1d4669c582975f7c1a4db87/core/test/unit/src/com/bluemarsh/graphmaker/core/util/FibonacciHeapTest.java
+ */
 public class FibonacciHeapTest {
 	@Test
 	public void testDecreasePriority() {
@@ -43,10 +67,10 @@ public class FibonacciHeapTest {
 		// Second last should now be the min value.
 		entry = entries.remove(140);
 		assertEquals(entry, heap.peek().get());
-		heap.delete(entry);
+		heap.remove(entry);
 		// Remove the third smallest entry.
 		entry = entries.remove(110);
-		heap.delete(entry);
+		heap.remove(entry);
 		// Original min value should now be the min.
 		entry = entries.get(100);
 		assertEquals(entry, heap.peek().get());

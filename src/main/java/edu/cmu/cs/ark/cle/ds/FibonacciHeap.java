@@ -9,7 +9,15 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * A Fibonacci heap, as described by Fredman and Tarjan.
+ * A Fibonacci heap (due to Fredman and Tarjan).
+ *
+ * This implementation was inspired and informed by those of
+ * Nathan L. Fiedler
+ * (https://github.com/nlfiedler/graphmaker/blob/990227c766a9891be1d4669c582975f7c1a4db87/core/src/com/bluemarsh/graphmaker/core/util/FibonacciHeap.java),
+ * and
+ * Keith Schwarz (htiek@cs.stanford.edu)
+ * (http://www.keithschwarz.com/interesting/code/?dir=fibonacci-heap),
+ * but rewritten from scratch by Sam Thomson (sthomson@cs.cmu.edu).
  *
  * @param <V> the type of the values stored in the heap
  * @param <P> the type of the priorities
@@ -24,15 +32,15 @@ public class FibonacciHeap<V,P> {
 	private final Comparator<? super P> comparator;
 
 	class Entry {
-		private V value;
+		public final V value;
 		private P priority;
 		private Optional<Entry> oParent = Optional.absent();
 		private Optional<Entry> oFirstChild = Optional.absent();
 		private Entry previous;
 		private Entry next;
 		private int degree = 0;
-		/** Whether this entry has had a child removed since it was
-		 * added to its parent. */
+		// Whether this entry has had a child cut since it was added to its parent.
+		// An entry can only have one child cut before it has to be cut itself.
 		private boolean isMarked = false;
 
 		private Entry(V value, P priority) {
@@ -40,7 +48,6 @@ public class FibonacciHeap<V,P> {
 			this.priority = priority;
 			previous = next = this;
 		}
-
 	}
 
 	private FibonacciHeap(Comparator<? super P> comparator) {
@@ -49,9 +56,10 @@ public class FibonacciHeap<V,P> {
 	}
 
 	public static <T,C> FibonacciHeap<T,C> create(Comparator<? super C> comparator) {
-		return new FibonacciHeap<T, C>(comparator);
+		return new FibonacciHeap<T,C>(comparator);
 	}
 
+	/** Create a new FibonacciHeap based on the natural ordering on `C` */
 	public static <T,C extends Comparable> FibonacciHeap<T,C> create() {
 		return FibonacciHeap.create(Ordering.<C>natural());
 	}
@@ -99,7 +107,7 @@ public class FibonacciHeap<V,P> {
      * Deletes `entry` from the heap. The heap will be consolidated, if necessary.
      * Runtime: O(log n) amortized
      */
-    public void delete(Entry entry) {
+    public void remove(Entry entry) {
 		entry.priority = null;
 		cutAndMakeRoot(entry);
 		oMinEntry = Optional.of(entry);
@@ -144,24 +152,20 @@ public class FibonacciHeap<V,P> {
      * Runtime: O(log n) amortized
      */
     public Optional<V> poll() {
-		if (!oMinEntry.isPresent()) {
-			return Optional.absent();
-		}
+		if (!oMinEntry.isPresent()) return Optional.absent();
 		final Entry minEntry = oMinEntry.get();
 		// move minEntry's children to the root list
 		if (minEntry.oFirstChild.isPresent()) {
-			final Entry minFirstChild = minEntry.oFirstChild.get();
-			minFirstChild.oParent = Optional.absent();
-            for (Entry childOfMin = minFirstChild.next; childOfMin != minFirstChild; childOfMin = childOfMin.next) {
-                childOfMin.oParent = Optional.absent();
-            }
+			for (Entry childOfMin : getCycle(minEntry.oFirstChild.get())) {
+				childOfMin.oParent = Optional.absent();
+			}
 			mergeLists(oMinEntry, minEntry.oFirstChild);
         }
         // remove minEntry from root list
-		final Entry next = minEntry.next;
-		if (minEntry.equals(next)) {
+		if (size == 1) {
             oMinEntry = Optional.absent();
         } else {
+			final Entry next = minEntry.next;
 			unlinkFromNeighbors(minEntry);
 			oMinEntry = Optional.of(consolidate(next));
         }
@@ -251,17 +255,14 @@ public class FibonacciHeap<V,P> {
 		}
 	}
 
-	/**
-	 * Make this entry a child of the given parent entry. All linkages
-	 * are updated, the degree of the parent is incremented, and
-	 * `isMarked` is set to false.
-	 */
-	private void setParent(Entry entry, Entry parent) {
+	/** Attaches `entry` as a child of `parent`. Returns `parent`. */
+	private Entry setParent(Entry entry, Entry parent) {
 		unlinkFromNeighbors(entry);
 		entry.oParent = Optional.of(parent);
 		parent.oFirstChild = mergeLists(Optional.of(entry), parent.oFirstChild);
 		parent.degree++;
 		entry.isMarked = false;
+		return parent;
 	}
 
 	private static void unlinkFromNeighbors(FibonacciHeap.Entry entry) {
@@ -279,29 +280,27 @@ public class FibonacciHeap<V,P> {
 	 */
 	private Entry consolidate(Entry someRoot) {
 		Entry minRoot = someRoot;
-		// For each root list entry look for others of the same degree.
-		// move the larger priority root beneath the smaller priority root
+		// `rootsByDegree[d]` will hold the best root we've looked at so far with degree `d`.
 		final Object[] rootsByDegree = new Object[MAX_DEGREE];
 		for (Entry currRoot : getCycle(someRoot)) {
-			int degree = currRoot.degree;
-			Entry leastRootOfDegree = currRoot;
-			while (rootsByDegree[degree] != null) {
+			// Put `currRoot` into `rootsByDegree`. If there's already something in its spot,
+			// merge them into a new tree of degree `degree + 1`. Keep merging until we find an
+			// empty spot.
+			Entry mergedRoot = currRoot;
+			for (int degree = currRoot.degree; rootsByDegree[degree] != null; degree++) {
 				@SuppressWarnings("unchecked")
-				Entry oldRootOfCurrDegree = (Entry) rootsByDegree[degree];
-				// move the larger priority root beneath the smaller priority root
-				if (comparator.compare(leastRootOfDegree.priority, oldRootOfCurrDegree.priority) < 0) {
-					setParent(oldRootOfCurrDegree, leastRootOfDegree);
+				Entry oldRoot = (Entry) rootsByDegree[degree];
+				// move the worse root beneath the better root
+				if (comparator.compare(mergedRoot.priority, oldRoot.priority) < 0) {
+					mergedRoot = setParent(oldRoot, mergedRoot);
 				} else {
-					setParent(leastRootOfDegree, oldRootOfCurrDegree);
-					leastRootOfDegree = oldRootOfCurrDegree;
+					mergedRoot = setParent(mergedRoot, oldRoot);
 				}
-				// `leastRootOfDegree` now has degree `degree` + 1
 				rootsByDegree[degree] = null;
-				degree++;
 			}
-			rootsByDegree[degree] = leastRootOfDegree;
-			if (comparator.compare(leastRootOfDegree.priority, minRoot.priority) <= 0) {
-				minRoot = leastRootOfDegree;
+			rootsByDegree[mergedRoot.degree] = mergedRoot;
+			if (comparator.compare(mergedRoot.priority, minRoot.priority) <= 0) {
+				minRoot = mergedRoot;
 			}
 		}
 		return minRoot;
