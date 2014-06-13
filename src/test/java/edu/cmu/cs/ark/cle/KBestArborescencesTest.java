@@ -4,6 +4,11 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import edu.cmu.cs.ark.cle.ds.Partition;
+import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
+import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.graph.WeightedGraph;
+import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
 import java.util.List;

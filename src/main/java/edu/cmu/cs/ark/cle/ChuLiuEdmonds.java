@@ -4,13 +4,18 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import edu.cmu.cs.ark.cle.util.Pair;
+import edu.cmu.cs.ark.cle.ds.Partition;
+import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.graph.WeightedGraph;
+import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.*;
 
 import static com.google.common.base.Predicates.and;
 import static com.google.common.base.Predicates.not;
 import static edu.cmu.cs.ark.cle.EdgeQueueMap.EdgeQueue;
-import static edu.cmu.cs.ark.cle.Weighted.weighted;
+import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
 
 /**
  * Chu-Liu-Edmonds' algorithm for finding a maximum branching in a complete, directed graph in O(n^2) time.

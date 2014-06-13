@@ -1,9 +1,10 @@
-package edu.cmu.cs.ark.cle;
+package edu.cmu.cs.ark.cle.graph;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ContiguousSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.*;
 

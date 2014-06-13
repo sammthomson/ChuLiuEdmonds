@@ -1,4 +1,4 @@
-package edu.cmu.cs.ark.cle;
+package edu.cmu.cs.ark.cle.graph;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Predicate;
@@ -56,7 +56,7 @@ public class Edge<V> {
 
 	//// Edge Predicates
 
-	static <T> Predicate<Edge<T>> hasDestination(final T node) {
+	public static <T> Predicate<Edge<T>> hasDestination(final T node) {
 		return new Predicate<Edge<T>>() {
 			@Override public boolean apply(Edge<T> input) {
 				return input.destination.equals(node);
@@ -64,7 +64,7 @@ public class Edge<V> {
 		};
 	}
 
-	static <T> Predicate<Edge<T>> competesWith(final Set<Edge<T>> required) {
+	public static <T> Predicate<Edge<T>> competesWith(final Set<Edge<T>> required) {
 		final ImmutableMap.Builder<T, T> requiredSourceByDestinationBuilder = ImmutableMap.builder();
 		for (Edge<T> edge : required) {
 			requiredSourceByDestinationBuilder.put(edge.destination, edge.source);
@@ -78,7 +78,7 @@ public class Edge<V> {
 		};
 	}
 
-	static <T> Predicate<Edge<T>> isAutoCycle() {
+	public static <T> Predicate<Edge<T>> isAutoCycle() {
 		return new Predicate<Edge<T>>() {
 			@Override public boolean apply(Edge<T> input) {
 				return input.source.equals(input.destination);
@@ -86,7 +86,7 @@ public class Edge<V> {
 		};
 	}
 
-	static <T> Predicate<Edge<T>> isIn(final Set<Edge<T>> banned) {
+	public static <T> Predicate<Edge<T>> isIn(final Set<Edge<T>> banned) {
 		return new Predicate<Edge<T>>() {
 			@Override public boolean apply(Edge<T> input) {
 				return banned.contains(input);

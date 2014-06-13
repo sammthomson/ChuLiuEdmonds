@@ -2,6 +2,7 @@ package edu.cmu.cs.ark.cle;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Doubles;
+import edu.cmu.cs.ark.cle.graph.Edge;
 
 import java.util.List;
 

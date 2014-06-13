@@ -4,12 +4,17 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
+import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.graph.SparseWeightedGraph;
+import edu.cmu.cs.ark.cle.graph.WeightedGraph;
+import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Map;
 
-import static edu.cmu.cs.ark.cle.Weighted.weighted;
+import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
 import static org.junit.Assert.assertEquals;
 
 /**

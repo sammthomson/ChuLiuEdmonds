@@ -3,6 +3,10 @@ package edu.cmu.cs.ark.cle;
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import edu.cmu.cs.ark.cle.util.Pair;
+import edu.cmu.cs.ark.cle.ds.Partition;
+import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.Collections;
 import java.util.List;

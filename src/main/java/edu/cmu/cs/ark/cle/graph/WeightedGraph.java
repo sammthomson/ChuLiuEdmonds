@@ -1,7 +1,8 @@
-package edu.cmu.cs.ark.cle;
+package edu.cmu.cs.ark.cle.graph;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
+import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.Collection;
 import java.util.List;
