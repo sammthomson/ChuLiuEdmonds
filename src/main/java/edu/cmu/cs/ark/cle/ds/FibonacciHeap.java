@@ -69,10 +69,6 @@ public class FibonacciHeap<V,P> implements Iterable<FibonacciHeap<V,P>.Entry> {
 		return FibonacciHeap.create(Ordering.<C>natural());
 	}
 
-	public Entry entry(V value, P priority) {
-		return new Entry(value, priority);
-	}
-
 	/**
 	 * Returns the comparator used to order the elements in this
 	 * queue.
@@ -136,7 +132,7 @@ public class FibonacciHeap<V,P> implements Iterable<FibonacciHeap<V,P>.Entry> {
 		Preconditions.checkNotNull(value);
 		Preconditions.checkNotNull(priority);
 		if (size >= MAX_CAPACITY) return Optional.absent();
-        final Entry result = entry(value, priority);
+		final Entry result = new Entry(value, priority);
 		// add as a root
 		oMinEntry = mergeLists(Optional.of(result), oMinEntry);
         size++;
@@ -200,22 +196,13 @@ public class FibonacciHeap<V,P> implements Iterable<FibonacciHeap<V,P>.Entry> {
 		return result;
     }
 
-	LinkedList<Entry> getCycle(Entry start) {
-		final LinkedList<Entry> results = Lists.newLinkedList();
-		Entry current = start;
-		do {
-			results.add(current);
-			current = current.next;
-		} while (!current.equals(start));
-		return results;
-	}
-
 	/** Returns every entry in this heap, in no particular order. */
 	@Override
 	public Iterator<Entry> iterator() {
 		return siblingsAndBelow(oMinEntry);
 	}
 
+	/** Depth-first iteration */
 	private Iterator<Entry> siblingsAndBelow(Optional<Entry> oEntry) {
 		if (!oEntry.isPresent()) return Iterators.emptyIterator();
 		return concat(transform(getCycle(oEntry.get()).iterator(), new Function<Entry, Iterator<Entry>>() {
@@ -223,6 +210,16 @@ public class FibonacciHeap<V,P> implements Iterable<FibonacciHeap<V,P>.Entry> {
 				return concat(singletonIterator(entry), siblingsAndBelow(entry.oFirstChild));
 			}
 		}));
+	}
+
+	private LinkedList<Entry> getCycle(Entry start) {
+		final LinkedList<Entry> results = Lists.newLinkedList();
+		Entry current = start;
+		do {
+			results.add(current);
+			current = current.next;
+		} while (!current.equals(start));
+		return results;
 	}
 
 	/**
