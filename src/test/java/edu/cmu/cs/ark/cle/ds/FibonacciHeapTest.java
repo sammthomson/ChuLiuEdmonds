@@ -21,15 +21,11 @@
 package edu.cmu.cs.ark.cle.ds;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import static org.junit.Assert.*;
 
@@ -44,36 +40,29 @@ public class FibonacciHeapTest {
 		// Inserts a set of elements, decreases some of their priorities, then
 		// extracts them by key order and ensures everything comes out
 		// in the order expected.
-		FibonacciHeap<Integer,Integer> heap = FibonacciHeap.create();
+		final FibonacciHeap<Integer,Integer> heap = FibonacciHeap.create();
 		assertTrue(heap.isEmpty());
 		assertEquals(0, heap.size());
-		Map<Integer, FibonacciHeap<Integer,Integer>.Entry> entries = Maps.newHashMap();
+		// keep references to entries as we add them so we can decreasePriority and remove
+		final Map<Integer, FibonacciHeap<Integer,Integer>.Entry> entries = Maps.newHashMap();
 		for (int i = 100; i < 200; i++) {
-			entries.put(i, heap.add(i, i));
+			entries.put(i, heap.add(i, i).get());
 		}
 		assertFalse(heap.isEmpty());
 		assertEquals(100, heap.size());
-		FibonacciHeap<Integer,Integer>.Entry entry = entries.get(110);
-		heap.decreasePriority(entry, 50);
-		entry = entries.get(140);
-		heap.decreasePriority(entry, 25);
-		entry = entries.get(160);
-		heap.decreasePriority(entry, 15);
+		heap.decreasePriority(entries.get(110), 50);
+		heap.decreasePriority(entries.get(140), 25);
+		heap.decreasePriority(entries.get(160), 15);
 		// Last one should be the min value.
-		assertEquals(entry, heap.peek().get());
-		final int min = heap.poll().get();
-		assertEquals(160, min);
-		entries.remove(min);
+		assertEquals(heap.peekOption().get(), entries.get(160));
+		assertEquals(160, heap.pollOption().get().intValue());
 		// Second last should now be the min value.
-		entry = entries.remove(140);
-		assertEquals(entry, heap.peek().get());
-		heap.remove(entry);
+		assertEquals(heap.peekOption().get(), entries.get(140));
+		heap.remove(entries.get(140));
 		// Remove the third smallest entry.
-		entry = entries.remove(110);
-		heap.remove(entry);
+		heap.remove(entries.get(110));
 		// Original min value should now be the min.
-		entry = entries.get(100);
-		assertEquals(entry, heap.peek().get());
+		assertEquals(heap.peekOption().get(), entries.get(100));
 		heap.clear();
 		assertTrue(heap.isEmpty());
 		assertEquals(0, heap.size());
@@ -91,7 +80,7 @@ public class FibonacciHeapTest {
 		}
 		assertFalse(heap.isEmpty());
 		assertEquals(1000, heap.size());
-		heap.poll();
+		heap.pollOption();
 		assertFalse(heap.isEmpty());
 		assertEquals(999, heap.size());
 		heap.clear();
@@ -114,7 +103,7 @@ public class FibonacciHeapTest {
 		heap.add(1001, Double.MIN_NORMAL);
 		assertFalse(heap.isEmpty());
 		assertEquals(1000, heap.size());
-		assertTrue(heap.poll().get() < 1001);
+		assertTrue(heap.pollOption().get() < 1001);
 		assertFalse(heap.isEmpty());
 		assertEquals(999, heap.size());
 		heap.clear();
@@ -137,37 +126,11 @@ public class FibonacciHeapTest {
 		heap.add(1001, 0.0);
 		assertFalse(heap.isEmpty());
 		assertEquals(1000, heap.size());
-		assertEquals(1001, heap.poll().get().intValue());
+		assertEquals(1001, heap.pollOption().get().intValue());
 		assertFalse(heap.isEmpty());
 		assertEquals(999, heap.size());
 		heap.clear();
 		assertTrue(heap.isEmpty());
-		assertEquals(0, heap.size());
-	}
-
-	@Test
-	public void testLotsOfRandomInserts() {
-		// This is a stress test that inserts numerous random elements and
-		// ensures that they come out in increasing order by value. This
-		// extreme case uncovered multiple bugs in nearly every public
-		// implementation of fibonacci heap.
-		final FibonacciHeap<Integer,Integer> heap = FibonacciHeap.create();
-		assertTrue(heap.isEmpty());
-		assertEquals(0, heap.size());
-		// Insert a lot of random numbers.
-		final Random random = new Random();
-		for (int i = 0; i < 50000; i++) {
-			int r = random.nextInt();
-			heap.add(r, r);
-		}
-		assertEquals(50000, heap.size());
-		// Ensure the numbers come out in increasing order.
-		List<Integer> polled = Lists.newLinkedList();
-		while (!heap.isEmpty()) {
-			polled.add(heap.poll().get());
-		}
-		assertTrue(Ordering.<Integer>natural().isOrdered(polled));
-		assertEquals(50000, polled.size());
 		assertEquals(0, heap.size());
 	}
 
@@ -196,11 +159,11 @@ public class FibonacciHeapTest {
 		final FibonacciHeap<Integer,Integer> joined = FibonacciHeap.merge(heap1, heap2);
 		assertFalse(joined.isEmpty());
 		assertEquals(10, joined.size());
-		Optional<Integer> oVal = joined.poll();
+		Optional<Integer> oVal = joined.pollOption();
 		int i = 1;
 		assertTrue(oVal.get() == i);
 		while (!joined.isEmpty()) {
-			oVal = joined.poll();
+			oVal = joined.pollOption();
 			assertTrue(oVal.get() > i);
 			i = oVal.get();
 		}
@@ -323,7 +286,7 @@ public class FibonacciHeapTest {
 		Arrays.sort(values);
 		int i = 0;
 		while (!heap.isEmpty()) {
-			assertEquals(values[i], heap.poll().get(), 0.0001);
+			assertEquals(values[i], heap.pollOption().get(), 0.0001);
 			i++;
 		}
 	}

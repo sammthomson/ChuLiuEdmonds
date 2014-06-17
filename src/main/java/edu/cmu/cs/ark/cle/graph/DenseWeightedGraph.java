@@ -36,7 +36,7 @@ public class DenseWeightedGraph<V> extends WeightedGraph<V> {
 	}
 
 	public static DenseWeightedGraph<Integer> from(double[][] weights) {
-		final ContiguousSet<Integer> nodes = ContiguousSet.create(closedOpen(0, weights.length), integers());
+		final Set<Integer> nodes = ContiguousSet.create(closedOpen(0, weights.length), integers());
 		return DenseWeightedGraph.from(nodes, weights);
 	}
 

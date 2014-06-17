@@ -1,9 +1,7 @@
 package edu.cmu.cs.ark.cle;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.Edge;
 import edu.cmu.cs.ark.cle.graph.SparseWeightedGraph;
@@ -11,7 +9,6 @@ import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
@@ -45,16 +42,6 @@ public class ChuLiuEdmondsTest {
 		assertEquals(sumOfWeights, bestTree.weight, DELTA);
 	}
 
-	static <V> String showTree(Weighted<Arborescence<V>> weightedSpanningTree) {
-		List<String> lines = Lists.newArrayList();
-		final Map<V, V> maxBranching = weightedSpanningTree.val.parents;
-		for (V to : maxBranching.keySet()) {
-			lines.add(maxBranching.get(to) + " -> " + to);
-		}
-		lines.add(Double.toString(weightedSpanningTree.weight));
-		return Joiner.on("\n").join(lines);
-	}
-
 	@Test
 	public void testGetMaxSpanningTree() {
 		/*
@@ -78,8 +65,7 @@ public class ChuLiuEdmondsTest {
 		};
 		final DenseWeightedGraph<Integer> graph = DenseWeightedGraph.from(weights);
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-//		System.out.println(showTree(weightedSpanningTree));
-	/*
+		/*
 		root
 		(0)           (1)
 		 |             ^
@@ -151,7 +137,6 @@ public class ChuLiuEdmondsTest {
 				weighted(Edge.from(10).to(3), 3)
 		));
 		final Weighted<Arborescence<Integer>> weightedSpanningTree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-//		System.out.println(showTree(weightedSpanningTree));
 
 		final Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
 		assertEdgesSumToScore(graph, weightedSpanningTree);

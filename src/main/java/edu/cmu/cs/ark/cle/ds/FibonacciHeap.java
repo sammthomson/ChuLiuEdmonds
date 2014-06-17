@@ -1,12 +1,17 @@
 package edu.cmu.cs.ark.cle.ds;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 
 import java.util.Comparator;
-import java.util.List;
+import java.util.Iterator;
+import java.util.LinkedList;
+
+import static com.google.common.collect.Iterators.*;
 
 /**
  * A Fibonacci heap (due to Fredman and Tarjan).
@@ -22,7 +27,7 @@ import java.util.List;
  * @param <V> the type of the values stored in the heap
  * @param <P> the type of the priorities
  */
-public class FibonacciHeap<V,P> {
+public class FibonacciHeap<V,P> implements Iterable<FibonacciHeap<V,P>.Entry> {
 	public final static int MAX_CAPACITY = Integer.MAX_VALUE;
 	// the largest degree of any root list entry is guaranteed to be <= log_phi(MAX_CAPACITY) = 45
 	private final static int MAX_DEGREE = 45;
@@ -111,7 +116,7 @@ public class FibonacciHeap<V,P> {
 		entry.priority = null;
 		cutAndMakeRoot(entry);
 		oMinEntry = Optional.of(entry);
-		poll();
+		pollOption();
     }
 
     /**
@@ -123,26 +128,26 @@ public class FibonacciHeap<V,P> {
     }
 
     /**
-     * Inserts a new value element into the heap.
+     * Inserts a new entry into the heap and returns the entry if heap is not full. Returns absent otherwise.
 	 * No heap consolidation is performed.
      * Runtime: O(1)
      */
-    public Entry add(V value, P priority) {
+    public Optional<Entry> add(V value, P priority) {
 		Preconditions.checkNotNull(value);
 		Preconditions.checkNotNull(priority);
-		Preconditions.checkArgument(size < MAX_CAPACITY, "Maximum capacity reached.");
+		if (size >= MAX_CAPACITY) return Optional.absent();
         final Entry result = entry(value, priority);
 		// add as a root
 		oMinEntry = mergeLists(Optional.of(result), oMinEntry);
         size++;
-        return result;
+        return Optional.of(result);
     }
 
 	/**
 	 * Returns the entry with the minimum priority, or absent if empty.
 	 * Runtime: O(1)
 	 */
-	public Optional<Entry> peek() {
+	public Optional<Entry> peekOption() {
 		return oMinEntry;
 	}
 
@@ -151,7 +156,7 @@ public class FibonacciHeap<V,P> {
      * the trees in the heap to be consolidated, if necessary.
      * Runtime: O(log n) amortized
      */
-    public Optional<V> poll() {
+    public Optional<V> pollOption() {
 		if (!oMinEntry.isPresent()) return Optional.absent();
 		final Entry minEntry = oMinEntry.get();
 		// move minEntry's children to the root list
@@ -195,14 +200,29 @@ public class FibonacciHeap<V,P> {
 		return result;
     }
 
-	private List<Entry> getCycle(Entry start) {
-		final List<Entry> results = Lists.newLinkedList();
+	LinkedList<Entry> getCycle(Entry start) {
+		final LinkedList<Entry> results = Lists.newLinkedList();
 		Entry current = start;
 		do {
 			results.add(current);
 			current = current.next;
 		} while (!current.equals(start));
 		return results;
+	}
+
+	/** Returns every entry in this heap, in no particular order. */
+	@Override
+	public Iterator<Entry> iterator() {
+		return siblingsAndBelow(oMinEntry);
+	}
+
+	private Iterator<Entry> siblingsAndBelow(Optional<Entry> oEntry) {
+		if (!oEntry.isPresent()) return Iterators.emptyIterator();
+		return concat(transform(getCycle(oEntry.get()).iterator(), new Function<Entry, Iterator<Entry>>() {
+			@Override public Iterator<Entry> apply(Entry entry) {
+				return concat(singletonIterator(entry), siblingsAndBelow(entry.oFirstChild));
+			}
+		}));
 	}
 
 	/**

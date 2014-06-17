@@ -3,15 +3,16 @@ package edu.cmu.cs.ark.cle;
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import edu.cmu.cs.ark.cle.util.Pair;
+import edu.cmu.cs.ark.cle.ds.FibonacciQueue;
 import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.util.Pair;
 import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 
 
 class EdgeQueueMap<V> {
@@ -20,12 +21,12 @@ class EdgeQueueMap<V> {
 
 	public static class EdgeQueue<V> {
 		private final V component;
-		public final PriorityQueue<ExclusiveEdge<V>> edges;
+		public final FibonacciQueue<ExclusiveEdge<V>> edges;
 		private final Partition<V> partition;
 
 		private EdgeQueue(V component, Partition<V> partition) {
 			this.component = component;
-			this.edges = new PriorityQueue<ExclusiveEdge<V>>(11, Collections.reverseOrder());
+			this.edges = FibonacciQueue.create(Collections.reverseOrder()); // highest weight edges first
 			this.partition = partition;
 		}
 
@@ -36,7 +37,6 @@ class EdgeQueueMap<V> {
 		public void addEdge(ExclusiveEdge<V> exclusiveEdge) {
 			// only add if source is external to SCC
 			if (partition.componentOf(exclusiveEdge.edge.source) == component) return;
-			// only keep the best edge for each source node
 			edges.add(exclusiveEdge);
 		}
 
@@ -46,44 +46,22 @@ class EdgeQueueMap<V> {
 
 		/** Always breaks ties in favor of edges in bestArborescence */
 		public Optional<ExclusiveEdge<V>> popBestEdge(Arborescence<V> bestArborescence) {
-			final List<ExclusiveEdge<V>> maxInEdges = maxWithTies(edges);
-			if (maxInEdges.isEmpty()) return Optional.absent();
-			Optional<ExclusiveEdge<V>> maxInEdge = Optional.absent();
-			for (ExclusiveEdge<V> ee : maxInEdges) {
-				final Edge<V> e = ee.edge;
-				final V dest = e.destination;
-				if (bestArborescence.parents.containsKey(dest) && bestArborescence.parents.get(dest) == e.source) {
-					maxInEdge = Optional.of(ee);
-					break;
-				}
+			if (edges.isEmpty()) return Optional.absent();
+			final LinkedList<ExclusiveEdge<V>> candidates = Lists.newLinkedList();
+			do {
+				candidates.addFirst(edges.poll());
+			} while (!edges.isEmpty()
+					&& edges.comparator().compare(candidates.getFirst(), edges.peek()) == 0  // has to be tied for best
+					&& !bestArborescence.contains(candidates.getFirst().edge));   // break if we've found one in `bestArborescence`
+			// at this point all edges in `candidates` have equal weight, and if one of them is in `bestArborescence`
+			// it will be first
+			final ExclusiveEdge<V> bestEdge = candidates.removeFirst();
+//			edges.addAll(candidates); // add back all the edges we looked at but didn't pick
+			for (ExclusiveEdge<V> c : candidates) {
+				edges.add(c);
 			}
-			if (!maxInEdge.isPresent()) {
-				maxInEdge = Optional.of(maxInEdges.get(0));
-			}
-			edges.remove(maxInEdge.get());
-			return maxInEdge;
+			return Optional.of(bestEdge);
 		}
-	}
-
-	public static <T extends Object & Comparable<? super T>> List<T> maxWithTies(PriorityQueue<T> queue) {
-		List<T> candidates = Lists.newArrayList();
-		if (!queue.isEmpty()) {
-			candidates.add(queue.poll());
-		}
-		while (!queue.isEmpty()) {
-			T next = queue.poll();
-			final int cmp = queue.comparator().compare(candidates.get(0), next);
-			if (cmp == 0) {
-				candidates.add(next);
-			} else {
-				queue.add(next);
-				break;
-			}
-		}
-		for (T candidate : candidates) {
-			queue.add(candidate);
-		}
-		return candidates;
 	}
 
 	EdgeQueueMap(Partition<V> partition) {

@@ -3,66 +3,72 @@ package edu.cmu.cs.ark.cle;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import edu.cmu.cs.ark.cle.ds.Partition;
-import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.graph.SparseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static edu.cmu.cs.ark.cle.ChuLiuEdmondsTest.*;
+import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
 import static org.junit.Assert.*;
 
 public class KBestArborescencesTest {
 	private final static ImmutableSet<Edge<Integer>> empty = ImmutableSet.of();
+	// tied for first, can appear in either order
+	private final static Weighted<Arborescence<Integer>> bestA = weighted(Arborescence.of(ImmutableMap.of(
+			1, 0,
+			2, 1,
+			3, 2
+	)), 21);
+	private final static Weighted<Arborescence<Integer>> bestB = weighted(Arborescence.of(ImmutableMap.of(
+			1, 3,
+			2, 1,
+			3, 0
+	)), 21);
+	final static Set<Weighted<Arborescence<Integer>>> expectedFirstAndSecond = ImmutableSet.of(bestA, bestB);
 
 	@Test
 	public void testGetKBestArborescences() {
 		final List<Weighted<Arborescence<Integer>>> weightedSpanningTrees =
 				KBestArborescences.getKBestArborescences(graph, 0, 4);
 
+		assertEquals(4, ImmutableSet.copyOf(weightedSpanningTrees).size());
+
 		Weighted<Arborescence<Integer>> weightedSpanningTree = weightedSpanningTrees.get(0);
-		Map<Integer, Integer> maxBranching = weightedSpanningTree.val.parents;
-		assertEquals(0, maxBranching.get(1).intValue());
-		assertEquals(1, maxBranching.get(2).intValue());
-		assertEquals(2, maxBranching.get(3).intValue());
-		assertEquals(21.0, weightedSpanningTree.weight, DELTA);
+		assertTrue(expectedFirstAndSecond.contains(weightedSpanningTree));
 		assertEdgesSumToScore(graph, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(1);
-		maxBranching = weightedSpanningTree.val.parents;
-		assertEquals(3, maxBranching.get(1).intValue());
-		assertEquals(1, maxBranching.get(2).intValue());
-		assertEquals(0, maxBranching.get(3).intValue());
-		assertEquals(21.0, weightedSpanningTree.weight, DELTA);
+		assertTrue(expectedFirstAndSecond.contains(weightedSpanningTree));
 		assertEdgesSumToScore(graph, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(2);
-		maxBranching = weightedSpanningTree.val.parents;
-		assertEquals(0, maxBranching.get(1).intValue());
-		assertEquals(1, maxBranching.get(2).intValue());
-		assertEquals(1, maxBranching.get(3).intValue());
-		assertEquals(20.0, weightedSpanningTree.weight, DELTA);
+		final Arborescence<Integer> expectedThird = Arborescence.of(ImmutableMap.of(
+				1, 0,
+				2, 1,
+				3, 1));
+		assertEquals(weighted(expectedThird, 20), weightedSpanningTree);
 		assertEdgesSumToScore(graph, weightedSpanningTree);
 
 		weightedSpanningTree = weightedSpanningTrees.get(3);
-		maxBranching = weightedSpanningTree.val.parents;
-		assertEquals(2, maxBranching.get(1).intValue());
-		assertEquals(3, maxBranching.get(2).intValue());
-		assertEquals(0, maxBranching.get(3).intValue());
-		assertEquals(19.0, weightedSpanningTrees.get(3).weight, DELTA);
+		final Arborescence<Integer> expectedFourth = Arborescence.of(ImmutableMap.of(
+				1, 2,
+				2, 3,
+				3, 0));
+		assertEquals(weighted(expectedFourth, 19.0), weightedSpanningTree);
 		assertEdgesSumToScore(graph, weightedSpanningTree);
 	}
 
 	@Test
 	public void testGetLotsOfKBest() {
 		final int k = 100;
-		final List<Weighted<Arborescence<Integer>>> kBestSpanningTrees = KBestArborescences.getKBestArborescences(graph, 0, k);
+		final List<Weighted<Arborescence<Integer>>> kBestSpanningTrees =
+				KBestArborescences.getKBestArborescences(graph, 0, k);
 		final int size = kBestSpanningTrees.size();
 		// make sure there are no more than k of them
 		assertTrue(size <= k);
@@ -70,22 +76,23 @@ public class KBestArborescencesTest {
 		for (int i = 0; i + 1 < size; i++) {
 			assertTrue(kBestSpanningTrees.get(i).weight >= kBestSpanningTrees.get(i+1).weight);
 		}
-		// make sure they're all unique
-		final Set<String> kBestStrings = Sets.newHashSet();
 		for (Weighted<Arborescence<Integer>> spanningTree : kBestSpanningTrees) {
-			kBestStrings.add(showTree(spanningTree));
+			assertEdgesSumToScore(graph, spanningTree);
 		}
-		assertEquals(size, kBestStrings.size());
+		// make sure they're all unique
+		assertEquals(size, ImmutableSet.copyOf(kBestSpanningTrees).size());
 	}
 
 	@Test
 	public void testSeekDoesntReturnAncestor() {
-		final Weighted<Arborescence<Integer>> bestArborescence = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		final Weighted<Arborescence<Integer>> bestArborescence = bestA;
 		final ExclusiveEdge<Integer> maxInEdge = ExclusiveEdge.of(Edge.from(1).to(2), 11.0);
-		final EdgeQueueMap.EdgeQueue<Integer> edgeQueue = EdgeQueueMap.EdgeQueue.create(maxInEdge.edge.destination, Partition.singletons(graph.getNodes()));
+		final EdgeQueueMap.EdgeQueue<Integer> edgeQueue =
+				EdgeQueueMap.EdgeQueue.create(maxInEdge.edge.destination, Partition.singletons(graph.getNodes()));
 		edgeQueue.addEdge(ExclusiveEdge.of(Edge.from(0).to(2), 1.0));
 		edgeQueue.addEdge(ExclusiveEdge.of(Edge.from(3).to(2), 8.0));
-		final Optional<ExclusiveEdge<Integer>> nextBestEdge = KBestArborescences.seek(maxInEdge, bestArborescence.val, edgeQueue);
+		final Optional<ExclusiveEdge<Integer>> nextBestEdge =
+				KBestArborescences.seek(maxInEdge, bestArborescence.val, edgeQueue);
 		assertTrue(nextBestEdge.isPresent());
 		// 3 -> 2 is an ancestor in bestArborescence, so seek should not return it
 		assertNotEquals(Edge.from(3).to(2), nextBestEdge.get().edge);
@@ -100,7 +107,8 @@ public class KBestArborescencesTest {
 				3, 2
 		));
 		final ExclusiveEdge<Integer> maxInEdge = ExclusiveEdge.of(Edge.from(2).to(1), 10.0);
-		final EdgeQueueMap.EdgeQueue<Integer> edgeQueue = EdgeQueueMap.EdgeQueue.create(maxInEdge.edge.destination, Partition.singletons(graph.getNodes()));
+		final EdgeQueueMap.EdgeQueue<Integer> edgeQueue =
+				EdgeQueueMap.EdgeQueue.create(maxInEdge.edge.destination, Partition.singletons(graph.getNodes()));
 		edgeQueue.addEdge(ExclusiveEdge.of(Edge.from(0).to(1), 5.0));
 		edgeQueue.addEdge(ExclusiveEdge.of(Edge.from(3).to(1), 9.0));
 		final Optional<ExclusiveEdge<Integer>> nextBestEdge = KBestArborescences.seek(maxInEdge, best, edgeQueue);
@@ -111,10 +119,8 @@ public class KBestArborescencesTest {
 
 	@Test
 	public void testNext() {
-		// get the best tree A(1)
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> oItem =
-				KBestArborescences.scoreSubsetOfSolutions(graph, empty, empty, best);
+				KBestArborescences.scoreSubsetOfSolutions(graph, empty, empty, bestA);
 		assertTrue(oItem.isPresent());
 		final KBestArborescences.SubsetOfSolutions<Integer> item = oItem.get().val;
 		assertEquals(Edge.from(0).to(1), item.edgeToBan);
@@ -123,10 +129,8 @@ public class KBestArborescencesTest {
 
 	@Test
 	public void testNextWithRequiredEdges() {
-		// get the best tree A(1)
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
 		final Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> oItem =
-				KBestArborescences.scoreSubsetOfSolutions(graph, ImmutableSet.of(Edge.from(0).to(1)), empty, best);
+				KBestArborescences.scoreSubsetOfSolutions(graph, ImmutableSet.of(Edge.from(0).to(1)), empty, bestA);
 		assertTrue(oItem.isPresent());
 		final KBestArborescences.SubsetOfSolutions<Integer> item = oItem.get().val;
 		assertEquals(Edge.from(2).to(3), item.edgeToBan);
@@ -135,14 +139,12 @@ public class KBestArborescencesTest {
 
 	@Test
 	public void testNextReturnsAbsentWhenTreesAreExhausted() {
-		// get the best tree A(1)
-		final WeightedGraph<Integer> graph = DenseWeightedGraph.from(new double[][]{
-				{NINF, 1.0},
-				{NINF, NINF}
-		});
-		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-		Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> pair =
-				KBestArborescences.scoreSubsetOfSolutions(graph, empty, empty, best);
+		final WeightedGraph<Integer> oneTreeGraph = SparseWeightedGraph.from(
+				ImmutableSet.of(weighted(Edge.from(0).to(1), 1.0))
+		);
+		final Weighted<Arborescence<Integer>> best = ChuLiuEdmonds.getMaxArborescence(oneTreeGraph, 0);
+		final Optional<Weighted<KBestArborescences.SubsetOfSolutions<Integer>>> pair =
+				KBestArborescences.scoreSubsetOfSolutions(oneTreeGraph, empty, empty, best);
 		assertFalse(pair.isPresent());
 	}
 }
