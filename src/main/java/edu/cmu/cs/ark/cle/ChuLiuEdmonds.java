@@ -1,6 +1,7 @@
 package edu.cmu.cs.ark.cle;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -158,7 +159,7 @@ public class ChuLiuEdmonds {
 		 * Runtime is O(n^2) in the worst case.
 		 */
 		private Weighted<Arborescence<V>> recoverBestArborescence() {
-			final Map<V, V> parents = Maps.newHashMap();
+			final ImmutableMap.Builder<V, V> parents = ImmutableMap.builder();
 			final Set<Edge> excluded = Sets.newHashSet();
 			// start with the most recent
 			while (!edgesAndWhatTheyExclude.isEmpty()) {
@@ -169,7 +170,7 @@ public class ChuLiuEdmonds {
 					parents.put(edge.destination, edge.source);
 				}
 			}
-			return weighted(Arborescence.of(parents), score);
+			return weighted(Arborescence.of(parents.build()), score);
 		}
 
 		public Optional<ExclusiveEdge<V>> popBestEdge(V component) {

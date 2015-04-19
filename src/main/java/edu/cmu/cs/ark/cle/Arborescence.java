@@ -18,13 +18,13 @@ public class Arborescence<V> {
 	 * In an arborescence, each node (other than the root) has exactly one parent. This is the map
 	 * from each node to its parent.
 	 */
-	final Map<V, V> parents;
+	public final ImmutableMap<V, V> parents;
 
-	private Arborescence(Map<V, V> parents) {
+	private Arborescence(ImmutableMap<V, V> parents) {
 		this.parents = parents;
 	}
 
-	public static <T> Arborescence<T> of(Map<T, T> parents) {
+	public static <T> Arborescence<T> of(ImmutableMap<T, T> parents) {
 		return new Arborescence<T>(parents);
 	}
 
