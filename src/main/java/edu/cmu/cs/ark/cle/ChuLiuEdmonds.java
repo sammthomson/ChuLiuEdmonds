@@ -31,7 +31,7 @@ public class ChuLiuEdmonds {
 		private final Partition<V> stronglyConnected;
 		private final Iterator<V> startingNodes;
 		private final Set<V> visited = Sets.newHashSet();
-		private final Set<V> onPath = Sets.newHashSet();
+		private Set<V> onPath = Sets.newHashSet();
 		// Chosen edges in predecessor order; a cycle is a suffix of this path.
 		private final Deque<Weighted<Edge<V>>> path = new ArrayDeque<>();
 		private Optional<V> pendingComponent = Optional.absent();
@@ -77,7 +77,8 @@ public class ChuLiuEdmonds {
 				final V component = stronglyConnected.componentOf(startingNodes.next());
 				if (visited.add(component)) {
 					path.clear();
-					onPath.clear();
+					// HashSet.clear() would repeatedly scan the largest previous path's backing table.
+					onPath = Sets.newHashSet();
 					onPath.add(component);
 					return Optional.of(component);
 				}

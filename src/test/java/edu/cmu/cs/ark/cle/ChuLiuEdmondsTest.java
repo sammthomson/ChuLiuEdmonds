@@ -131,6 +131,26 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
+	public void testLongPathFollowedByManySingletonPaths() {
+		final int length = 1024;
+		final List<Integer> nodes = new ArrayList<>();
+		final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+		final ImmutableMap.Builder<Integer, Integer> parents = ImmutableMap.builder();
+		for (int node = 0; node <= 2 * length; node++) nodes.add(node);
+		for (int destination = 0; destination < nodes.size(); destination++) {
+			if (destination == length) continue;
+			final Integer source = nodes.get(destination < length ? destination + 1 : length);
+			edges.add(weighted(Edge.from(source).to(nodes.get(destination)), 1.0));
+			parents.put(nodes.get(destination), source);
+		}
+		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(nodes, edges);
+		final Weighted<Arborescence<Integer>> tree =
+				ChuLiuEdmonds.getMaxArborescence(graph, nodes.get(length));
+		assertEquals(parents.build(), tree.val.parents);
+		assertEquals(2.0 * length, tree.weight, DELTA);
+	}
+
+	@Test
 	public void testDisconnectedForestAndIsolatedNode() {
 		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
 				ImmutableList.of(4, 3, 2, 1, 0, 5), ImmutableList.of(
