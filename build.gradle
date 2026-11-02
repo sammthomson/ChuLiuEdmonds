@@ -1,0 +1,36 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'edu.cmu.cs.ark'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+dependencies {
+    api 'com.google.guava:guava:14.0'
+    testImplementation 'junit:junit:4.11'
+}
+
+tasks.register('fatJar', Jar) {
+    archiveClassifier = 'all'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { zipTree(it) }
+    }
+}
+
+tasks.named('assemble') {
+    dependsOn tasks.named('fatJar')
+}

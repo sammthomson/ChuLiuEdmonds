@@ -10,8 +10,7 @@ import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static edu.cmu.cs.ark.cle.ChuLiuEdmondsTest.*;
 import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
@@ -31,6 +30,40 @@ public class KBestArborescencesTest {
 			3, 0
 	)), 21);
 	final static Set<Weighted<Arborescence<Integer>>> expectedFirstAndSecond = ImmutableSet.of(bestA, bestB);
+
+	private static void assertRankingMatchesOracle(WeightedGraph<Integer> graph, int root) {
+		final List<Weighted<Arborescence<Integer>>> expected = enumerateArborescences(graph, root);
+		expected.sort(Comparator.comparingDouble((Weighted<Arborescence<Integer>> tree) -> tree.weight).reversed());
+		final List<Weighted<Arborescence<Integer>>> actual =
+				KBestArborescences.getKBestArborescences(graph, root, expected.size() + 1);
+		assertEquals(expected.size(), actual.size());
+		assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+		for (int index = 0; index < expected.size(); index++) {
+			assertEquals("Rank " + index, expected.get(index).weight, actual.get(index).weight, DELTA);
+			assertRootedTree(graph, root, actual.get(index));
+		}
+	}
+
+	@Test
+	public void testNestedCyclesRankingAgainstExhaustiveOracle() {
+		assertRankingMatchesOracle(nestedCyclesGraph(), 0);
+	}
+
+	@Test
+	public void testTiedRankingsAgainstExhaustiveOracle() {
+		final Random random = new Random(271828);
+		for (int sample = 0; sample < 20; sample++) {
+			final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+			for (int source = 0; source < 4; source++) {
+				for (int destination = 0; destination < 4; destination++) {
+					if (source != destination) {
+						edges.add(weighted(Edge.from(source).to(destination), random.nextInt(5) - 2));
+					}
+				}
+			}
+			assertRankingMatchesOracle(SparseWeightedGraph.from(edges), sample % 4);
+		}
+	}
 
 	@Test
 	public void testGetKBestArborescences() {
@@ -97,6 +130,20 @@ public class KBestArborescencesTest {
 		// 3 -> 2 is an ancestor in bestArborescence, so seek should not return it
 		assertNotEquals(Edge.from(3).to(2), nextBestEdge.get().edge);
 		assertEquals(Edge.from(0).to(2), nextBestEdge.get().edge);
+	}
+
+	@Test
+	public void testSeekPreservesAncestorEdgesForCycleContraction() {
+		for (boolean hasAlternative : new boolean[] {false, true}) {
+			final ExclusiveEdge<Integer> maxInEdge = ExclusiveEdge.of(Edge.from(1).to(2), 11.0);
+			final EdgeQueueMap.EdgeQueue<Integer> queue =
+					EdgeQueueMap.EdgeQueue.create(2, Partition.singletons(graph.getNodes()));
+			final ExclusiveEdge<Integer> ancestorEdge = ExclusiveEdge.of(Edge.from(3).to(2), 8.0);
+			queue.addEdge(ancestorEdge);
+			if (hasAlternative) queue.addEdge(ExclusiveEdge.of(Edge.from(0).to(2), 1.0));
+			assertEquals(hasAlternative, KBestArborescences.seek(maxInEdge, bestA.val, queue).isPresent());
+			assertEquals(ancestorEdge.edge, queue.popBestEdge().get().edge);
+		}
 	}
 
 	@Test
