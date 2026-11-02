@@ -11,7 +11,6 @@ import edu.cmu.cs.ark.cle.util.Weighted;
 
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.Set;
 
 import static com.google.common.base.Predicates.and;
@@ -23,7 +22,7 @@ import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
 import static java.util.Collections.singleton;
 
 /**
- * Finds the k best arborescences of a complete, directed graph in O(n^2 log n) time.
+ * Finds the k best spanning arborescences of a directed graph.
  * Based on "The k best spanning arborescences of a network." Camerini et al. 1980
  *
  * @author sthomson@cs.cmu.edu, swabha@cs.cmu.edu
@@ -58,7 +57,9 @@ public class KBestArborescences {
 			final Set<Edge<V>> newBanned = copyOf(concat(item.banned, singleton(item.edgeToBan)));
 			final Weighted<Arborescence<V>> jthBest =
 					ChuLiuEdmonds.getMaxArborescence(graph, item.required, newBanned);
-			assert jthBest.weight == wItem.weight;
+			assert jthBest.weight == wItem.weight
+					: "Predicted " + wItem.weight + " but got " + jthBest
+					+ "; required=" + item.required + "; banned=" + newBanned;
 			results.add(jthBest);
 			// subset of solutions in item that *don't* have `edgeToBan`, except `jthBest`
 			queue.addAll(scoreSubsetOfSolutions(graph, item.required, newBanned, jthBest).asSet());
@@ -102,21 +103,18 @@ public class KBestArborescences {
 																			   Arborescence<V> bestArborescence) {
 		final PartialSolution<V> partialSolution =
 				PartialSolution.initialize(graph.filterEdges(not(Edge.<V>isAutoCycle())));
-		// In the beginning, subgraph has no edges, so no SCC has in-edges.
-		final Queue<V> componentsWithNoInEdges = Lists.newLinkedList(graph.getNodes());
-
 		double bestDifference = Double.POSITIVE_INFINITY;
 		Optional<ExclusiveEdge<V>> bestEdgeToKickOut = Optional.absent();
 
-		// Work our way through all componentsWithNoInEdges, in no particular order
-		while (!componentsWithNoInEdges.isEmpty()) {
-			final V component = componentsWithNoInEdges.poll();
+		for (Optional<V> next = partialSolution.nextComponent(); next.isPresent();
+			 next = partialSolution.nextComponent()) {
+			final V component = next.get();
 			// find maximum edge entering 'component' from the outside.
 			// break ties in favor of edges in bestArborescence
 			final Optional<ExclusiveEdge<V>> oMaxInEdge = partialSolution.popBestEdge(component, bestArborescence);
 			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
 			final ExclusiveEdge<V> maxInEdge = oMaxInEdge.get();
-			if (bestArborescence.parents.get(maxInEdge.edge.destination).equals(maxInEdge.edge.source)) {
+			if (bestArborescence.contains(maxInEdge.edge)) {
 				final Optional<ExclusiveEdge<V>> oAlternativeEdge =
 						seek(maxInEdge, bestArborescence, partialSolution.unseenIncomingEdges.queueByDestination.get(component));
 				if (oAlternativeEdge.isPresent()) {
@@ -128,12 +126,7 @@ public class KBestArborescences {
 					}
 				}
 			}
-			// add the new edge to subgraph, merging SCCs if necessary
-			final Optional<V> newComponent = partialSolution.addEdge(maxInEdge);
-			if (newComponent.isPresent()) {
-				// addEdge created a cycle, which means the new cycle doesn't have any incoming edges
-				componentsWithNoInEdges.add(newComponent.get());
-			}
+			partialSolution.addEdge(maxInEdge);
 		}
 		if (bestEdgeToKickOut.isPresent()) {
 			return Optional.of(Pair.of(bestEdgeToKickOut.get().edge, bestDifference));
@@ -161,17 +154,21 @@ public class KBestArborescences {
 	public static <V> Optional<ExclusiveEdge<V>> seek(ExclusiveEdge<V> maxInEdge,
 													  Arborescence<V> bestArborescence,
 													  EdgeQueueMap.EdgeQueue<V> edgeQueue) {
+		final List<ExclusiveEdge<V>> examinedEdges = Lists.newArrayList();
 		Optional<ExclusiveEdge<V>> oNextBestEdge = edgeQueue.popBestEdge();
 		while (oNextBestEdge.isPresent()) {
 			final ExclusiveEdge<V> nextBestEdge = oNextBestEdge.get();
+			examinedEdges.add(nextBestEdge);
 			if (!isAncestor(nextBestEdge.edge.source, maxInEdge.edge.destination, bestArborescence)) {
-				edgeQueue.addEdge(nextBestEdge);
-				return oNextBestEdge;
-			} else {
-				oNextBestEdge = edgeQueue.popBestEdge();
+				break;
 			}
+			oNextBestEdge = edgeQueue.popBestEdge();
 		}
-		return Optional.absent();
+		// Ancestor edges are not single-edge alternatives, but are still needed for cycle contractions.
+		for (ExclusiveEdge<V> edge : examinedEdges) {
+			edgeQueue.addEdge(edge);
+		}
+		return oNextBestEdge;
 	}
 
 	/**

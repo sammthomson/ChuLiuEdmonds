@@ -1,6 +1,7 @@
 package edu.cmu.cs.ark.cle;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.Edge;
@@ -9,10 +10,10 @@ import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
 import org.junit.Test;
 
-import java.util.Map;
+import java.util.*;
 
 import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  * @author sthomson@cs.cmu.edu
@@ -40,6 +41,194 @@ public class ChuLiuEdmondsTest {
 			sumOfWeights += originalEdgeWeights.getWeightOf(source, dest);
 		}
 		assertEquals(sumOfWeights, bestTree.weight, DELTA);
+	}
+
+	static <V> void assertRootedTree(WeightedGraph<V> graph, V root, Weighted<Arborescence<V>> tree) {
+		assertEquals(graph.getNodes().size() - 1, tree.val.parents.size());
+		assertFalse(tree.val.parents.containsKey(root));
+		for (V node : graph.getNodes()) {
+			final Set<V> seen = new HashSet<>();
+			V current = node;
+			while (!current.equals(root)) {
+				assertTrue("Cycle in " + tree, seen.add(current));
+				assertTrue("Missing parent for " + current, tree.val.parents.containsKey(current));
+				current = tree.val.parents.get(current);
+			}
+		}
+		assertEdgesSumToScore(graph, tree);
+	}
+
+	// Independent oracle: enumerate parent assignments and reject those that do not reach the root.
+	static List<Weighted<Arborescence<Integer>>> enumerateArborescences(WeightedGraph<Integer> graph, int root) {
+		final List<Integer> destinations = new ArrayList<>(graph.getNodes());
+		destinations.remove(Integer.valueOf(root));
+		final List<Weighted<Arborescence<Integer>>> trees = new ArrayList<>();
+		enumerateArborescences(graph, root, destinations, 0, new HashMap<Integer, Integer>(), 0.0, trees);
+		return trees;
+	}
+
+	private static void enumerateArborescences(WeightedGraph<Integer> graph, int root,
+											 List<Integer> destinations, int index, Map<Integer, Integer> parents,
+											 double score, List<Weighted<Arborescence<Integer>>> trees) {
+		if (index == destinations.size()) {
+			for (int node : destinations) {
+				final Set<Integer> seen = new HashSet<>();
+				int current = node;
+				while (current != root) {
+					if (!seen.add(current)) return;
+					current = parents.get(current);
+				}
+			}
+			trees.add(weighted(Arborescence.of(ImmutableMap.copyOf(parents)), score));
+			return;
+		}
+		final int destination = destinations.get(index);
+		for (Weighted<Edge<Integer>> edge : graph.getIncomingEdges(destination)) {
+			if (edge.val.source.equals(destination) || edge.weight == NINF) continue;
+			parents.put(destination, edge.val.source);
+			enumerateArborescences(graph, root, destinations, index + 1, parents, score + edge.weight, trees);
+		}
+		parents.remove(destination);
+	}
+
+	static WeightedGraph<Integer> nestedCyclesGraph() {
+		return SparseWeightedGraph.from(ImmutableList.of(6, 5, 4, 3, 2, 1, 0), ImmutableList.of(
+				weighted(Edge.from(0).to(1), 1),
+				weighted(Edge.from(1).to(2), 10),
+				weighted(Edge.from(2).to(1), 9),
+				weighted(Edge.from(2).to(3), 8),
+				weighted(Edge.from(3).to(2), 7),
+				weighted(Edge.from(3).to(4), 6),
+				weighted(Edge.from(4).to(3), 5),
+				weighted(Edge.from(0).to(4), 0),
+				weighted(Edge.from(4).to(5), 4),
+				weighted(Edge.from(5).to(6), 3),
+				weighted(Edge.from(0).to(6), -1)));
+	}
+
+	@Test
+	public void testNestedCyclesWithPathLeadingIntoThem() {
+		final WeightedGraph<Integer> graph = nestedCyclesGraph();
+		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		assertRootedTree(graph, 0, tree);
+		assertEquals(32.0, tree.weight, DELTA);
+	}
+
+	@Test
+	public void testPathsJoinPreviouslyProcessedBranches() {
+		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
+				ImmutableList.of(5, 4, 3, 2, 1, 0), ImmutableList.of(
+						weighted(Edge.from(0).to(1), 4),
+						weighted(Edge.from(1).to(2), 3),
+						weighted(Edge.from(1).to(3), 2),
+						weighted(Edge.from(3).to(4), 1),
+						weighted(Edge.from(2).to(5), -2),
+						weighted(Edge.from(4).to(4), 100),
+						weighted(Edge.from(5).to(0), 100)));
+		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		assertRootedTree(graph, 0, tree);
+		assertEquals(8.0, tree.weight, DELTA);
+	}
+
+	@Test
+	public void testLongPathFollowedByManySingletonPaths() {
+		final int length = 1024;
+		final List<Integer> nodes = new ArrayList<>();
+		final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+		final ImmutableMap.Builder<Integer, Integer> parents = ImmutableMap.builder();
+		for (int node = 0; node <= 2 * length; node++) nodes.add(node);
+		for (int destination = 0; destination < nodes.size(); destination++) {
+			if (destination == length) continue;
+			final Integer source = nodes.get(destination < length ? destination + 1 : length);
+			edges.add(weighted(Edge.from(source).to(nodes.get(destination)), 1.0));
+			parents.put(nodes.get(destination), source);
+		}
+		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(nodes, edges);
+		final Weighted<Arborescence<Integer>> tree =
+				ChuLiuEdmonds.getMaxArborescence(graph, nodes.get(length));
+		assertEquals(parents.build(), tree.val.parents);
+		assertEquals(2.0 * length, tree.weight, DELTA);
+	}
+
+	@Test
+	public void testDisconnectedForestAndIsolatedNode() {
+		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
+				ImmutableList.of(4, 3, 2, 1, 0, 5), ImmutableList.of(
+						weighted(Edge.from(0).to(1), 3),
+						weighted(Edge.from(1).to(2), -1),
+						weighted(Edge.from(3).to(4), 2)));
+		final Weighted<Arborescence<Integer>> forest = ChuLiuEdmonds.getMaxArborescence(graph);
+		assertEquals(ImmutableMap.of(1, 0, 2, 1, 4, 3), forest.val.parents);
+		assertEquals(4.0, forest.weight, DELTA);
+		assertEdgesSumToScore(graph, forest);
+	}
+
+	@Test
+	public void testEmptyAndSingletonGraphs() {
+		final WeightedGraph<Integer> empty = SparseWeightedGraph.from(
+				ImmutableList.<Integer>of(), ImmutableList.<Weighted<Edge<Integer>>>of());
+		assertEquals(weighted(Arborescence.<Integer>empty(), 0.0), ChuLiuEdmonds.getMaxArborescence(empty));
+		final WeightedGraph<Integer> singleton = SparseWeightedGraph.from(
+				ImmutableList.of(0), ImmutableList.of(weighted(Edge.from(0).to(0), 100)));
+		assertRootedTree(singleton, 0, ChuLiuEdmonds.getMaxArborescence(singleton, 0));
+	}
+
+	@Test
+	public void testDenseAndSparseGraphsAgainstExhaustiveOracle() {
+		final Random random = new Random(20261101);
+		for (int sample = 0; sample < 60; sample++) {
+			final int size = 2 + sample % 5;
+			final int root = random.nextInt(size);
+			final double[][] weights = new double[size][size];
+			final List<Integer> nodes = new ArrayList<>();
+			final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+			for (int source = 0; source < size; source++) {
+				nodes.add(source);
+				for (int destination = 0; destination < size; destination++) {
+					final double weight = source == root || sample % 2 == 0 || random.nextBoolean()
+							? random.nextInt(11) - 5 : NINF;
+					weights[source][destination] = weight;
+					if (weight != NINF) edges.add(weighted(Edge.from(source).to(destination), weight));
+				}
+			}
+			Collections.shuffle(nodes, random);
+			final WeightedGraph<Integer> dense = DenseWeightedGraph.from(weights);
+			final WeightedGraph<Integer> sparse = SparseWeightedGraph.from(nodes, edges);
+			final double expected = enumerateArborescences(dense, root).stream()
+					.mapToDouble(tree -> tree.weight).max().getAsDouble();
+			for (WeightedGraph<Integer> graph : ImmutableList.of(dense, sparse)) {
+				final Weighted<Arborescence<Integer>> actual = ChuLiuEdmonds.getMaxArborescence(graph, root);
+				assertEquals("Sample " + sample + ", root " + root, expected, actual.weight, DELTA);
+				assertRootedTree(graph, root, actual);
+			}
+		}
+	}
+
+	@Test
+	public void testConstraintsAgainstExhaustiveOracle() {
+		final Random random = new Random(481516);
+		final Edge<Integer> required = Edge.from(0).to(1);
+		final Edge<Integer> banned = Edge.from(2).to(3);
+		for (int sample = 0; sample < 30; sample++) {
+			final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+			for (int source = 0; source < 4; source++) {
+				for (int destination = 1; destination < 4; destination++) {
+					if (source != destination) {
+						edges.add(weighted(Edge.from(source).to(destination), random.nextInt(11) - 5));
+					}
+				}
+			}
+			final WeightedGraph<Integer> graph = SparseWeightedGraph.from(edges);
+			final double expected = enumerateArborescences(graph, 0).stream()
+					.filter(tree -> tree.val.contains(required) && !tree.val.contains(banned))
+					.mapToDouble(tree -> tree.weight).max().getAsDouble();
+			final Weighted<Arborescence<Integer>> actual = ChuLiuEdmonds.getMaxArborescence(
+					graph, ImmutableSet.of(required), ImmutableSet.of(banned));
+			assertEquals("Constrained sample " + sample, expected, actual.weight, DELTA);
+			assertTrue(actual.val.contains(required));
+			assertFalse(actual.val.contains(banned));
+			assertRootedTree(graph, 0, actual);
+		}
 	}
 
 	@Test
