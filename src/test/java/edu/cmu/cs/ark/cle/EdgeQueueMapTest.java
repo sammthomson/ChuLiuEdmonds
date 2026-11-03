@@ -58,6 +58,28 @@ public class EdgeQueueMapTest {
 	}
 
 	@Test
+	public void testInfiniteRootKeepsFiniteChildrenAdjustable() {
+		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2, 3, 4));
+		final EdgeQueueMap<Integer> queues = new EdgeQueueMap<>(partition);
+		final EdgeQueue<Integer> queue = EdgeQueue.create(1, partition);
+		queue.addEdge(ExclusiveEdge.of(Edge.from(0).to(1), 3.0));
+		queue.addEdge(ExclusiveEdge.of(Edge.from(3).to(1), Double.POSITIVE_INFINITY));
+		queue.addEdge(ExclusiveEdge.of(Edge.from(4).to(1), 1.0));
+		final Edge<Integer> replace = Edge.from(2).to(1);
+		final int component = partition.merge(1, 2);
+		final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
+				Pair.of(queue, weighted(replace, 2.0))));
+
+		final ExclusiveEdge<Integer> infinite = merged.popBestEdge().get();
+		assertEquals(Double.POSITIVE_INFINITY, infinite.weight, 0.0);
+		assertEquals(ImmutableList.of(replace), infinite.excluded);
+		final ExclusiveEdge<Integer> next = merged.popBestEdge().get();
+		assertEquals(1.0, next.weight, 0.0);
+		assertEquals(ImmutableList.of(replace), next.excluded);
+		assertEquals(-1.0, merged.popBestEdge().get().weight, 0.0);
+	}
+
+	@Test
 	public void testNewEdgesDoNotInheritPendingContractionAdjustments() {
 		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2, 3, 4));
 		final EdgeQueueMap<Integer> queues = new EdgeQueueMap<>(partition);

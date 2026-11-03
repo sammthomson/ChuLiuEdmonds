@@ -89,6 +89,8 @@ class EdgeQueueMap<V> {
 		private HeapNode<V> right;
 		private int rank = 1;
 		private Exclusions<V> pendingExclusions;
+		/** True for a finite child of a +Infinity parent, which stores its absolute weight instead of a gap. */
+		private boolean absolute;
 
 		private HeapNode(ExclusiveEdge<V> edge) {
 			this.edge = edge.edge;
@@ -99,8 +101,19 @@ class EdgeQueueMap<V> {
 		/** Adjusts the weight of this root, and implicitly of its subtree. */
 		private void adjust(double delta, Exclusions<V> excluded) {
 			final double adjusted = weight + delta;
-			if (Double.isFinite(weight) && !Double.isFinite(adjusted)) {
-				throw new ArithmeticException("Adjusted edge weight overflows: " + weight + " + " + delta);
+			if (Double.isNaN(adjusted)
+					|| (Double.isFinite(weight) && Double.isFinite(delta) && !Double.isFinite(adjusted))) {
+				throw new ArithmeticException("Cannot adjust edge weight " + weight + " by " + delta);
+			}
+			if (weight == Double.POSITIVE_INFINITY && delta != 0.0) {
+				// Children of an infinite root may store absolute weights, so adjust them eagerly.
+				push();
+				exclusions = exclusions.concat(excluded);
+				if (left != null) left.adjust(delta, excluded);
+				if (right != null) right.adjust(delta, excluded);
+				rebase(left);
+				rebase(right);
+				return;
 			}
 			weight = adjusted;
 			appendExclusions(excluded);
@@ -120,7 +133,8 @@ class EdgeQueueMap<V> {
 
 		private void materialize(HeapNode<V> child) {
 			if (child == null) return;
-			child.weight = weight - child.weight;
+			if (!child.absolute) child.weight = weight - child.weight;
+			child.absolute = false;
 			if (pendingExclusions != null) child.appendExclusions(pendingExclusions);
 		}
 
@@ -128,6 +142,11 @@ class EdgeQueueMap<V> {
 		private void rebase(HeapNode<V> child) {
 			if (child == null) return;
 			final double absolute = child.weight;
+			if (weight == Double.POSITIVE_INFINITY && Double.isFinite(absolute)) {
+				// An infinite gap could not recover the child's weight, so keep it absolute.
+				child.absolute = true;
+				return;
+			}
 			// Equal weights, including equal infinities, have no gap (and must not produce NaN).
 			final double gap = weight == absolute ? 0.0 : weight - absolute;
 			if (!(gap >= 0.0) || (gap == Double.POSITIVE_INFINITY && Double.isFinite(absolute))) {

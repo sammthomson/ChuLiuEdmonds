@@ -46,7 +46,9 @@ additional data structures and improved asymptotic bound.
 Incoming-edge queues use a small leftist heap. Each root stores its absolute weight,
 and each other node stores its nonnegative gap below its parent, so adjusting a root
 adjusts its whole subtree. Floating-point rounding can then never place a child above
-its parent. Weights whose gaps overflow a `double` are rejected with an `ArithmeticException`.
+its parent. Finite children of a `+Infinity` parent keep absolute weights instead.
+Finite weights whose gaps overflow a `double`, and adjustments yielding `∞ - ∞`,
+are rejected with an `ArithmeticException`.
 Contraction melds the old queues instead of scanning and reinserting their edges.
 Exclusion histories are immutable concatenation trees shared between edges;
 they are traversed iteratively when reconstructing the answer. Edges that become
