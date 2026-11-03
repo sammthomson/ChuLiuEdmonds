@@ -34,3 +34,10 @@ tasks.register('fatJar', Jar) {
 tasks.named('assemble') {
     dependsOn tasks.named('fatJar')
 }
+
+tasks.register('benchmarkContractions', JavaExec) {
+    description = 'Measure a sparse graph family with deeply nested cycle contractions'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'edu.cmu.cs.ark.cle.ContractionBenchmark'
+}

@@ -26,6 +26,10 @@ mise run test -- --tests edu.cmu.cs.ark.cle.ChuLiuEdmondsTest --tests edu.cmu.cs
 The regression tests independently enumerate small rooted trees to check
 optimum scores, required/banned edges, and complete k-best rankings.
 
+Run `mise run benchmark` for a deliberately contraction-heavy sparse graph family.
+It reports the median of three runs after a small warmup; graph construction is
+outside the timed region. This is a focused diagnostic, not a general benchmark.
+
 ## Algorithm
 
 The implementation combines Tarjan's cycle contractions with the **growth path**
@@ -35,13 +39,22 @@ path identifies a cycle, whose path suffix is contracted. A path ends at a
 component with no incoming edge or at an already completed path.
 
 This removes the separate weak-component partition and incoming-edge map.
-The contraction partition and existing edge queues/reconstruction are retained;
+The contraction partition and exclusion-based reconstruction are retained;
 this is the **Tarjan+Path** variant, not the full GGST algorithm with its
 additional data structures and improved asymptotic bound.
 
-Queue merges still scan, reweight, and reinsert incoming edges. Nested
-contractions can revisit edges, so using Fibonacci heaps does not by itself
-give this implementation Tarjan's optimized sparse-graph bound.
+Incoming-edge queues use a small leftist heap. Each root stores its absolute weight,
+and each other node stores its nonnegative gap below its parent, so adjusting a root
+adjusts its whole subtree. Floating-point rounding can then never place a child above
+its parent. Weights whose gaps overflow a `double` are rejected with an `ArithmeticException`.
+Contraction melds the old queues instead of scanning and reinserting their edges.
+Exclusion histories are immutable concatenation trees shared between edges;
+they are traversed iteratively when reconstructing the answer. Edges that become
+internal to a contracted component are discarded lazily at the queue head.
+
+This removes bulk per-edge contraction updates without adding GGST's exit lists,
+passive lists, or specialized active forest. It does not claim the full GGST
+bound: tie handling and exclusion-based reconstruction can still do extra work.
 
 References:
 
