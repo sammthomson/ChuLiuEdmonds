@@ -9,3 +9,7 @@ run = "gradle test --console=plain"
 [tasks.build]
 description = "Build the library, sources, and bundled dependency jars"
 run = "gradle build --console=plain"
+
+[tasks.benchmark]
+description = "Measure repeated nested cycle contractions"
+run = "gradle benchmarkContractions --console=plain"

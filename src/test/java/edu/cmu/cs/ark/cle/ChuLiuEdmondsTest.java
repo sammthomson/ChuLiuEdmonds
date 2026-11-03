@@ -115,6 +115,66 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
+	public void testManyNestedCyclesWithUnusedIncomingEdges() {
+		final int size = 128;
+		final WeightedGraph<Integer> graph = ContractionBenchmark.graph(size);
+		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		final ImmutableMap.Builder<Integer, Integer> parents = ImmutableMap.builder();
+		parents.put(1, 0);
+		for (int node = 2; node <= 2 * size; node++) {
+			parents.put(node, node <= size ? 1 : 0);
+		}
+		assertEquals(parents.build(), tree.val.parents);
+		assertEquals(-10.0 * size, tree.weight, DELTA);
+		assertRootedTree(graph, 0, tree);
+	}
+
+	@Test
+	public void testPositiveInfiniteWeightsCompeteWithFiniteWeights() {
+		final WeightedGraph<Integer> forced = SparseWeightedGraph.from(
+				ImmutableList.of(0, 1, 2), ImmutableList.of(
+						weighted(Edge.from(0).to(1), Double.POSITIVE_INFINITY),
+						weighted(Edge.from(2).to(1), 1.0),
+						weighted(Edge.from(0).to(2), 1.0)));
+		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(forced, 0);
+		assertEquals(ImmutableMap.of(1, 0, 2, 0), tree.val.parents);
+		assertEquals(Double.POSITIVE_INFINITY, tree.weight, 0.0);
+
+		// Contracting the cycle 1 <-> 2 subtracts +Infinity from the other edges into node 1.
+		final WeightedGraph<Integer> cyclic = SparseWeightedGraph.from(
+				ImmutableList.of(0, 1, 2), ImmutableList.of(
+						weighted(Edge.from(2).to(1), Double.POSITIVE_INFINITY),
+						weighted(Edge.from(1).to(2), 5.0),
+						weighted(Edge.from(0).to(1), 1.0),
+						weighted(Edge.from(0).to(2), 2.0)));
+		final Weighted<Arborescence<Integer>> cyclicTree = ChuLiuEdmonds.getMaxArborescence(cyclic, 0);
+		assertEquals(ImmutableMap.of(1, 2, 2, 0), cyclicTree.val.parents);
+	}
+
+	@Test
+	public void testMixedScaleWeightsDoNotSelectSuboptimalTree() {
+		// Each node in {2, 3, 4} must be reached through node 1, so the optimal tree takes 0 -> 1 (0.5).
+		// Rounding adjusted weights to different values once picked 5 -> 1 (0.25) instead.
+		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
+				ImmutableList.of(0, 1, 2, 3, 4, 5), ImmutableList.of(
+						weighted(Edge.from(2).to(1), 1e16),
+						weighted(Edge.from(4).to(1), 1.875),
+						weighted(Edge.from(3).to(1), 1.625),
+						weighted(Edge.from(0).to(1), 0.5),
+						weighted(Edge.from(5).to(1), 0.25),
+						weighted(Edge.from(0).to(5), 0),
+						weighted(Edge.from(1).to(3), 0),
+						weighted(Edge.from(1).to(4), 0),
+						weighted(Edge.from(2).to(4), 0),
+						weighted(Edge.from(3).to(4), 0),
+						weighted(Edge.from(4).to(2), 0)));
+		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
+		// The reported score is not checked: 1e16 cancels the small weights while it is accumulated.
+		assertEquals(Integer.valueOf(0), tree.val.parents.get(1));
+		assertEquals(5, tree.val.parents.size());
+	}
+
+	@Test
 	public void testPathsJoinPreviouslyProcessedBranches() {
 		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
 				ImmutableList.of(5, 4, 3, 2, 1, 0), ImmutableList.of(
