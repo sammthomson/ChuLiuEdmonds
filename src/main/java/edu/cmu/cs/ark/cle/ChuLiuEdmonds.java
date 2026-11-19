@@ -9,6 +9,7 @@ import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
 import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
 import java.util.*;
 
@@ -58,7 +59,7 @@ public class ChuLiuEdmonds {
 			final EdgeQueueMap<T> incomingEdges = new EdgeQueueMap<T>(stronglyConnected);
 			for (T destinationNode : graph.getNodes()) {
 				for (Weighted<Edge<T>> inEdge : graph.getIncomingEdges(destinationNode)) {
-					if (inEdge.weight != Double.NEGATIVE_INFINITY) {
+					if (WeightMath.present(inEdge.weight)) {
 						incomingEdges.addEdge(inEdge);
 					}
 				}
@@ -126,7 +127,7 @@ public class ChuLiuEdmonds {
 		public void addEdge(ExclusiveEdge<V> wEdgeAndExcludes) {
 			final Edge<V> edge = wEdgeAndExcludes.edge;
 			final Weighted<Edge<V>> wEdge = weighted(edge, wEdgeAndExcludes.weight);
-			score += wEdgeAndExcludes.weight;
+			score = WeightMath.addScore(score, wEdgeAndExcludes.weight);
 			edgesAndWhatTheyExclude.addFirst(wEdgeAndExcludes);
 			path.addLast(wEdge);
 			final V source = stronglyConnected.componentOf(edge.source);

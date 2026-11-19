@@ -66,6 +66,23 @@ public class KBestArborescencesTest {
 	}
 
 	@Test
+	public void testSparseFractionalRankingsAgainstExhaustiveOracle() {
+		final Random random = new Random(161803);
+		for (int sample = 0; sample < 20; sample++) {
+			final int root = sample % 5;
+			final List<Weighted<Edge<Integer>>> edges = new ArrayList<>();
+			for (int source = 0; source < 5; source++) {
+				for (int destination = 0; destination < 5; destination++) {
+					if (source != destination && (source == root || random.nextBoolean())) {
+						edges.add(weighted(Edge.from(source).to(destination), (random.nextInt(41) - 20) / 8.0));
+					}
+				}
+			}
+			assertRankingMatchesOracle(SparseWeightedGraph.from(edges), root);
+		}
+	}
+
+	@Test
 	public void testGetKBestArborescences() {
 		final List<Weighted<Arborescence<Integer>>> weightedSpanningTrees =
 				KBestArborescences.getKBestArborescences(graph, 0, 4);

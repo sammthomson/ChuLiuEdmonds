@@ -5,6 +5,7 @@ import com.google.common.collect.ContiguousSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
 import java.util.*;
 
@@ -47,7 +48,7 @@ public class DenseWeightedGraph<V> extends WeightedGraph<V> {
 
 	@Override
 	public double getWeightOf(V source, V dest) {
-		if (!indexOf.containsKey(source) || !indexOf.containsKey(dest)) return Double.NEGATIVE_INFINITY;
+		if (!indexOf.containsKey(source) || !indexOf.containsKey(dest)) return WeightMath.missing();
 		return weights[indexOf.get(source)][indexOf.get(dest)];
 	}
 

@@ -1,19 +1,19 @@
 package edu.cmu.cs.ark.cle;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import edu.cmu.cs.ark.cle.ds.FibonacciQueue;
 import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
 import edu.cmu.cs.ark.cle.util.Pair;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
-import java.util.Collections;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static edu.cmu.cs.ark.cle.ExclusiveEdge.Exclusions;
+import static java.util.Collections.singletonList;
 
 class EdgeQueueMap<V> {
 	final Partition<V> partition;
@@ -21,12 +21,11 @@ class EdgeQueueMap<V> {
 
 	public static class EdgeQueue<V> {
 		private final V component;
-		public final FibonacciQueue<ExclusiveEdge<V>> edges;
 		private final Partition<V> partition;
+		private HeapNode<V> root;
 
 		private EdgeQueue(V component, Partition<V> partition) {
 			this.component = component;
-			this.edges = FibonacciQueue.create(Collections.reverseOrder()); // highest weight edges first
 			this.partition = partition;
 		}
 
@@ -36,8 +35,8 @@ class EdgeQueueMap<V> {
 
 		public void addEdge(ExclusiveEdge<V> exclusiveEdge) {
 			// only add if source is external to SCC
-			if (partition.componentOf(exclusiveEdge.edge.source) == component) return;
-			edges.add(exclusiveEdge);
+			if (partition.sameComponent(exclusiveEdge.edge.source, component)) return;
+			root = meld(root, new HeapNode<>(exclusiveEdge));
 		}
 
 		public Optional<ExclusiveEdge<V>> popBestEdge() {
@@ -46,22 +45,90 @@ class EdgeQueueMap<V> {
 
 		/** Always breaks ties in favor of edges in bestArborescence */
 		public Optional<ExclusiveEdge<V>> popBestEdge(Arborescence<V> bestArborescence) {
-			if (edges.isEmpty()) return Optional.absent();
-			final LinkedList<ExclusiveEdge<V>> candidates = Lists.newLinkedList();
-			do {
-				candidates.addFirst(edges.poll());
-			} while (!edges.isEmpty()
-					&& edges.comparator().compare(candidates.getFirst(), edges.peek()) == 0  // has to be tied for best
-					&& !bestArborescence.contains(candidates.getFirst().edge));   // break if we've found one in `bestArborescence`
-			// at this point all edges in `candidates` have equal weight, and if one of them is in `bestArborescence`
-			// it will be first
-			final ExclusiveEdge<V> bestEdge = candidates.removeFirst();
-//			edges.addAll(candidates); // add back all the edges we looked at but didn't pick
-			for (ExclusiveEdge<V> c : candidates) {
-				edges.add(c);
+			discardInternalEdges();
+			if (root == null) return Optional.absent();
+			final List<ExclusiveEdge<V>> candidates = new ArrayList<>();
+			ExclusiveEdge<V> bestEdge = removeBest();
+			while (!bestArborescence.contains(bestEdge.edge)) {
+				discardInternalEdges();
+				if (root == null || Double.compare(bestEdge.weight, root.weight) != 0) break;
+				candidates.add(bestEdge);
+				bestEdge = removeBest();
+			}
+			for (ExclusiveEdge<V> candidate : candidates) {
+				addEdge(candidate);
 			}
 			return Optional.of(bestEdge);
 		}
+
+		private void discardInternalEdges() {
+			while (root != null && partition.sameComponent(root.edge.source, component)) {
+				root.push();
+				root = meld(root.left, root.right);
+			}
+		}
+
+		private ExclusiveEdge<V> removeBest() {
+			final ExclusiveEdge<V> best = ExclusiveEdge.of(root.edge, root.exclusions, root.weight);
+			root.push();
+			root = meld(root.left, root.right);
+			return best;
+		}
+	}
+
+	/** Leftist max-heap. Only contractions change priorities. */
+	private static final class HeapNode<V> {
+		private final Edge<V> edge;
+		private Exclusions<V> exclusions;
+		private double weight;
+		private HeapNode<V> left;
+		private HeapNode<V> right;
+		private int rank = 1;
+		private Exclusions<V> pendingExclusions;
+		private double pendingCost;
+
+		private HeapNode(ExclusiveEdge<V> edge) {
+			this.edge = edge.edge;
+			exclusions = edge.exclusions;
+			weight = edge.weight;
+		}
+
+		/** Adjusts the weight of this root, and implicitly of its subtree. */
+		private void adjust(double cost, Exclusions<V> excluded) {
+			weight = WeightMath.subtract(weight, cost);
+			exclusions = exclusions.concat(excluded);
+			if (left != null || right != null) {
+				pendingCost = pendingExclusions == null ? cost : WeightMath.combine(pendingCost, cost);
+				pendingExclusions = pendingExclusions == null ? excluded : pendingExclusions.concat(excluded);
+			}
+		}
+
+		/** Push before changing the children so newly melded edges never inherit earlier costs. */
+		private void push() {
+			if (pendingExclusions == null) return;
+			if (left != null) left.adjust(pendingCost, pendingExclusions);
+			if (right != null) right.adjust(pendingCost, pendingExclusions);
+			pendingExclusions = null;
+		}
+	}
+
+	private static <V> HeapNode<V> meld(HeapNode<V> a, HeapNode<V> b) {
+		if (a == null) return b;
+		if (b == null) return a;
+		if (Double.compare(a.weight, b.weight) < 0) {
+			final HeapNode<V> swap = a;
+			a = b;
+			b = swap;
+		}
+		a.push();
+		a.right = meld(a.right, b);
+		if (a.left == null || a.left.rank < a.right.rank) {
+			final HeapNode<V> swap = a.left;
+			a.left = a.right;
+			a.right = swap;
+		}
+		a.rank = a.right == null ? 1 : a.right.rank + 1;
+		return a;
 	}
 
 	EdgeQueueMap(Partition<V> partition) {
@@ -74,8 +141,7 @@ class EdgeQueueMap<V> {
 		if (!queueByDestination.containsKey(destination)) {
 			queueByDestination.put(destination, EdgeQueue.create(destination, partition));
 		}
-		final List<Edge<V>> replaces = Lists.newLinkedList();
-		queueByDestination.get(destination).addEdge(ExclusiveEdge.of(edge.val, replaces, edge.weight));
+		queueByDestination.get(destination).addEdge(ExclusiveEdge.of(edge.val, edge.weight));
 	}
 
 	/** Always breaks ties in favor of edges in best */
@@ -84,19 +150,16 @@ class EdgeQueueMap<V> {
 		return queueByDestination.get(component).popBestEdge(best);
 	}
 
-	public EdgeQueue merge(V component, Iterable<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge) {
+	/** Consumes the old queues; adjusting each old root implicitly adjusts every edge below it. */
+	public EdgeQueue<V> merge(V component, Iterable<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge) {
 		final EdgeQueue<V> result = EdgeQueue.create(component, partition);
 		for (Pair<EdgeQueue<V>, Weighted<Edge<V>>> queueAndReplace : queuesToMerge) {
 			final EdgeQueue<V> queue = queueAndReplace.first;
 			final Weighted<Edge<V>> replace = queueAndReplace.second;
-			for (ExclusiveEdge<V> wEdgeAndExcluded : queue.edges) {
-				final List<Edge<V>> replaces = wEdgeAndExcluded.excluded;
-				replaces.add(replace.val);
-				result.addEdge(ExclusiveEdge.of(
-						wEdgeAndExcluded.edge,
-						replaces,
-						wEdgeAndExcluded.weight - replace.weight));
-			}
+			if (queue.root == null) continue;
+			queue.root.adjust(replace.weight, new Exclusions<>(singletonList(replace.val)));
+			result.root = meld(result.root, queue.root);
+			queue.root = null;
 		}
 		queueByDestination.put(component, result);
 		return result;

@@ -8,6 +8,7 @@ import edu.cmu.cs.ark.cle.util.Pair;
 import edu.cmu.cs.ark.cle.graph.Edge;
 import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
 import java.util.List;
 import java.util.PriorityQueue;
@@ -57,7 +58,7 @@ public class KBestArborescences {
 			final Set<Edge<V>> newBanned = copyOf(concat(item.banned, singleton(item.edgeToBan)));
 			final Weighted<Arborescence<V>> jthBest =
 					ChuLiuEdmonds.getMaxArborescence(graph, item.required, newBanned);
-			assert jthBest.weight == wItem.weight
+			assert !WeightMath.EXACT || jthBest.weight == wItem.weight
 					: "Predicted " + wItem.weight + " but got " + jthBest
 					+ "; required=" + item.required + "; banned=" + newBanned;
 			results.add(jthBest);
@@ -87,7 +88,7 @@ public class KBestArborescences {
 									wBestArborescence,
 									required,
 									banned),
-							wBestArborescence.weight - edgeToBanAndDiff.second
+							WeightMath.subtract(wBestArborescence.weight, edgeToBanAndDiff.second)
 					));
 		} else {
 			return Optional.absent();
@@ -103,7 +104,7 @@ public class KBestArborescences {
 																			   Arborescence<V> bestArborescence) {
 		final PartialSolution<V> partialSolution =
 				PartialSolution.initialize(graph.filterEdges(not(Edge.<V>isAutoCycle())));
-		double bestDifference = Double.POSITIVE_INFINITY;
+		double bestDifference = 0;
 		Optional<ExclusiveEdge<V>> bestEdgeToKickOut = Optional.absent();
 
 		for (Optional<V> next = partialSolution.nextComponent(); next.isPresent();
@@ -119,8 +120,8 @@ public class KBestArborescences {
 						seek(maxInEdge, bestArborescence, partialSolution.unseenIncomingEdges.queueByDestination.get(component));
 				if (oAlternativeEdge.isPresent()) {
 					final ExclusiveEdge<V> alternativeEdge = oAlternativeEdge.get();
-					final double difference = maxInEdge.weight - alternativeEdge.weight;
-					if (difference < bestDifference) {
+					final double difference = WeightMath.subtract(maxInEdge.weight, alternativeEdge.weight);
+					if (!bestEdgeToKickOut.isPresent() || difference < bestDifference) {
 						bestDifference = difference;
 						bestEdgeToKickOut = Optional.of(maxInEdge);
 					}

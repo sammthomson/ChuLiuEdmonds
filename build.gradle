@@ -21,6 +21,24 @@ dependencies {
     testImplementation 'junit:junit:4.11'
 }
 
+// Specialize the same Java sources for both primitives, without boxed heap keys.
+// Only identifiers change; arithmetic and missing-edge policies live in the two WeightMath classes.
+def specialized = ['Weighted', 'WeightedGraph', 'SparseWeightedGraph', 'DenseWeightedGraph',
+                   'ExclusiveEdge', 'EdgeQueueMap', 'ChuLiuEdmonds', 'KBestArborescences']
+def identifiers = (specialized + ['WeightMath']).collectEntries { [(it): "Long${it}"] } +
+        ['double': 'long', 'Double': 'Long', 'Doubles': 'Longs']
+def generateLongSources = tasks.register('generateLongSources', Sync) {
+    inputs.property('identifiers', identifiers)
+    from('src/main/java') {
+        specialized.each { include "**/${it}.java" }
+        rename { "Long${it}" }
+        filter { line -> line.replaceAll(/\b[A-Za-z_]\w*\b/) { word -> identifiers.getOrDefault(word, word) } }
+    }
+    into layout.buildDirectory.dir('generated/sources/long/java')
+    includeEmptyDirs = false
+}
+sourceSets.main.java.srcDir(generateLongSources)
+
 tasks.register('fatJar', Jar) {
     archiveClassifier = 'all'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
@@ -33,4 +51,11 @@ tasks.register('fatJar', Jar) {
 
 tasks.named('assemble') {
     dependsOn tasks.named('fatJar')
+}
+
+tasks.register('benchmarkContractions', JavaExec) {
+    description = 'Measure a sparse graph family with deeply nested cycle contractions'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'edu.cmu.cs.ark.cle.ContractionBenchmark'
 }

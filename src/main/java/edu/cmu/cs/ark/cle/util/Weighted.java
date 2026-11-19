@@ -16,7 +16,6 @@ public class Weighted<T> implements Comparable<Weighted<T>> {
 
 	public Weighted(T val, double weight) {
 		checkNotNull(val);
-		checkNotNull(weight);
 		this.val = val;
 		this.weight = weight;
 	}
