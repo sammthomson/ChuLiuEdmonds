@@ -5,9 +5,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import edu.cmu.cs.ark.cle.graph.DenseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.graph.LongSparseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.SparseWeightedGraph;
 import edu.cmu.cs.ark.cle.graph.WeightedGraph;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.LongWeighted;
 import org.junit.Test;
 
 import java.util.*;
@@ -152,26 +154,48 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
-	public void testMixedScaleWeightsDoNotSelectSuboptimalTree() {
-		// Each node in {2, 3, 4} must be reached through node 1, so the optimal tree takes 0 -> 1 (0.5).
-		// Rounding adjusted weights to different values once picked 5 -> 1 (0.25) instead.
-		final WeightedGraph<Integer> graph = SparseWeightedGraph.from(
-				ImmutableList.of(0, 1, 2, 3, 4, 5), ImmutableList.of(
-						weighted(Edge.from(2).to(1), 1e16),
-						weighted(Edge.from(4).to(1), 1.875),
-						weighted(Edge.from(3).to(1), 1.625),
-						weighted(Edge.from(0).to(1), 0.5),
-						weighted(Edge.from(5).to(1), 0.25),
-						weighted(Edge.from(0).to(5), 0),
-						weighted(Edge.from(1).to(3), 0),
-						weighted(Edge.from(1).to(4), 0),
-						weighted(Edge.from(2).to(4), 0),
-						weighted(Edge.from(3).to(4), 0),
-						weighted(Edge.from(4).to(2), 0)));
-		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);
-		// The reported score is not checked: 1e16 cancels the small weights while it is accumulated.
+	public void testLongMixedScaleContractionsRetainSmallDifferences() {
+		// The mixed-scale regression in units of 1/8: nodes 2, 3, 4 must be reached through 1.
+		final var graph = LongSparseWeightedGraph.from(ImmutableList.of(
+				longEdge(2, 1, 80_000_000_000_000_000L), longEdge(4, 1, 15), longEdge(3, 1, 13),
+				longEdge(0, 1, 4), longEdge(5, 1, 2), longEdge(0, 5, 0), longEdge(1, 3, 0),
+				longEdge(1, 4, 0), longEdge(2, 4, 0), longEdge(3, 4, 0), longEdge(4, 2, 0)));
+		final var tree = LongChuLiuEdmonds.getMaxArborescence(graph, 0);
 		assertEquals(Integer.valueOf(0), tree.val.parents.get(1));
+		assertEquals(4L, tree.weight);
 		assertEquals(5, tree.val.parents.size());
+	}
+
+	private static LongWeighted<Edge<Integer>> longEdge(int src, int dst, long weight) {
+		return LongWeighted.weighted(Edge.from(src).to(dst), weight);
+	}
+
+	@Test
+	public void testLongKBestRanksAdjacentLargeWeights() {
+		long smaller = 1L << 53;
+		var graph = LongSparseWeightedGraph.from(ImmutableList.of(
+				longEdge(0, 1, smaller), longEdge(2, 1, smaller + 1), longEdge(0, 2, 0)));
+		var trees = LongKBestArborescences.getKBestArborescences(graph, 0, 3);
+		assertEquals(2, trees.size());
+		assertEquals(Integer.valueOf(2), trees.get(0).val.parents.get(1));
+		assertEquals(smaller + 1, trees.get(0).weight);
+		assertEquals(Integer.valueOf(0), trees.get(1).val.parents.get(1));
+		assertEquals(smaller, trees.get(1).weight);
+	}
+
+	@Test
+	public void testLongMinimumIsAnEdgeNotASentinel() {
+		var graph = LongSparseWeightedGraph.from(ImmutableList.of(longEdge(0, 1, Long.MIN_VALUE)));
+		var tree = LongChuLiuEdmonds.getMaxArborescence(graph, 0);
+		assertEquals(Integer.valueOf(0), tree.val.parents.get(1));
+		assertEquals(Long.MIN_VALUE, tree.weight);
+	}
+
+	@Test(expected = ArithmeticException.class)
+	public void testLongScoreOverflowIsRejected() {
+		var graph = LongSparseWeightedGraph.from(ImmutableList.of(
+				longEdge(0, 1, Long.MAX_VALUE), longEdge(0, 2, 1)));
+		LongChuLiuEdmonds.getMaxArborescence(graph, 0);
 	}
 
 	@Test

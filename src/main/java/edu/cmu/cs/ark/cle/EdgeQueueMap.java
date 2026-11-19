@@ -6,6 +6,7 @@ import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
 import edu.cmu.cs.ark.cle.util.Pair;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,12 +76,7 @@ class EdgeQueueMap<V> {
 		}
 	}
 
-	/**
-	 * Leftist max-heap; its right spine has logarithmic depth.
-	 * A root stores its absolute weight, while a child stores its nonnegative gap below its parent,
-	 * so adjusting a root implicitly adjusts its whole subtree. Since {@code parent - gap <= parent}
-	 * under any rounding, floating-point error can never place a child above its parent.
-	 */
+	/** Leftist max-heap. Only contractions change priorities. */
 	private static final class HeapNode<V> {
 		private final Edge<V> edge;
 		private Exclusions<V> exclusions;
@@ -89,8 +85,7 @@ class EdgeQueueMap<V> {
 		private HeapNode<V> right;
 		private int rank = 1;
 		private Exclusions<V> pendingExclusions;
-		/** True for a finite child of a +Infinity parent, which stores its absolute weight instead of a gap. */
-		private boolean absolute;
+		private double pendingCost;
 
 		private HeapNode(ExclusiveEdge<V> edge) {
 			this.edge = edge.edge;
@@ -99,61 +94,21 @@ class EdgeQueueMap<V> {
 		}
 
 		/** Adjusts the weight of this root, and implicitly of its subtree. */
-		private void adjust(double delta, Exclusions<V> excluded) {
-			final double adjusted = weight + delta;
-			if (Double.isNaN(adjusted)
-					|| (Double.isFinite(weight) && Double.isFinite(delta) && !Double.isFinite(adjusted))) {
-				throw new ArithmeticException("Cannot adjust edge weight " + weight + " by " + delta);
-			}
-			if (weight == Double.POSITIVE_INFINITY && delta != 0.0) {
-				// Children of an infinite root may store absolute weights, so adjust them eagerly.
-				push();
-				exclusions = exclusions.concat(excluded);
-				if (left != null) left.adjust(delta, excluded);
-				if (right != null) right.adjust(delta, excluded);
-				rebase(left);
-				rebase(right);
-				return;
-			}
-			weight = adjusted;
-			appendExclusions(excluded);
-		}
-
-		private void appendExclusions(Exclusions<V> excluded) {
+		private void adjust(double cost, Exclusions<V> excluded) {
+			weight = WeightMath.subtract(weight, cost);
 			exclusions = exclusions.concat(excluded);
-			pendingExclusions = pendingExclusions == null ? excluded : pendingExclusions.concat(excluded);
+			if (left != null || right != null) {
+				pendingCost = pendingExclusions == null ? cost : WeightMath.combine(pendingCost, cost);
+				pendingExclusions = pendingExclusions == null ? excluded : pendingExclusions.concat(excluded);
+			}
 		}
 
-		/** Converts this root's children from gaps to absolute weights, so they can become roots. */
+		/** Push before changing the children so newly melded edges never inherit earlier costs. */
 		private void push() {
-			materialize(left);
-			materialize(right);
+			if (pendingExclusions == null) return;
+			if (left != null) left.adjust(pendingCost, pendingExclusions);
+			if (right != null) right.adjust(pendingCost, pendingExclusions);
 			pendingExclusions = null;
-		}
-
-		private void materialize(HeapNode<V> child) {
-			if (child == null) return;
-			if (!child.absolute) child.weight = weight - child.weight;
-			child.absolute = false;
-			if (pendingExclusions != null) child.appendExclusions(pendingExclusions);
-		}
-
-		/** Converts a child from an absolute weight to its gap below this node. */
-		private void rebase(HeapNode<V> child) {
-			if (child == null) return;
-			final double absolute = child.weight;
-			if (weight == Double.POSITIVE_INFINITY && Double.isFinite(absolute)) {
-				// An infinite gap could not recover the child's weight, so keep it absolute.
-				child.absolute = true;
-				return;
-			}
-			// Equal weights, including equal infinities, have no gap (and must not produce NaN).
-			final double gap = weight == absolute ? 0.0 : weight - absolute;
-			if (!(gap >= 0.0) || (gap == Double.POSITIVE_INFINITY && Double.isFinite(absolute))) {
-				throw new ArithmeticException(
-						"Edge weights " + weight + " and " + absolute + " are too far apart to compare");
-			}
-			child.weight = gap;
 		}
 	}
 
@@ -173,8 +128,6 @@ class EdgeQueueMap<V> {
 			a.right = swap;
 		}
 		a.rank = a.right == null ? 1 : a.right.rank + 1;
-		a.rebase(a.left);
-		a.rebase(a.right);
 		return a;
 	}
 
@@ -204,7 +157,7 @@ class EdgeQueueMap<V> {
 			final EdgeQueue<V> queue = queueAndReplace.first;
 			final Weighted<Edge<V>> replace = queueAndReplace.second;
 			if (queue.root == null) continue;
-			queue.root.adjust(-replace.weight, new Exclusions<>(singletonList(replace.val)));
+			queue.root.adjust(replace.weight, new Exclusions<>(singletonList(replace.val)));
 			result.root = meld(result.root, queue.root);
 			queue.root = null;
 		}

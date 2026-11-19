@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import edu.cmu.cs.ark.cle.util.Weighted;
+import edu.cmu.cs.ark.cle.util.WeightMath;
 
 import java.util.Collection;
 import java.util.Map;
@@ -48,9 +49,9 @@ public class SparseWeightedGraph<V> extends WeightedGraph<V> {
 
 	@Override
 	public double getWeightOf(V source, V dest) {
-		if (!incomingEdges.containsKey(dest)) return Double.NEGATIVE_INFINITY;
+		if (!incomingEdges.containsKey(dest)) return WeightMath.missing();
 		final Map<V, Weighted<Edge<V>>> inEdges = incomingEdges.get(dest);
-		if (!inEdges.containsKey(source)) return Double.NEGATIVE_INFINITY;
+		if (!inEdges.containsKey(source)) return WeightMath.missing();
 		return inEdges.get(source).weight;
 	}
 

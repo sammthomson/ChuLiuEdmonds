@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
+import edu.cmu.cs.ark.cle.util.LongWeighted;
 import edu.cmu.cs.ark.cle.util.Pair;
 import org.junit.Test;
 
@@ -100,8 +101,8 @@ public class EdgeQueueMapTest {
 		assertEquals(ImmutableList.of(replace), old.excluded);
 	}
 
-	@Test
-	public void testLargeSequentialAdjustmentsStayFinite() {
+	@Test(expected = ArithmeticException.class)
+	public void testUnrepresentableCombinedCostIsRejected() {
 		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2, 3, 4));
 		final EdgeQueueMap<Integer> queues = new EdgeQueueMap<>(partition);
 		EdgeQueue<Integer> queue = EdgeQueue.create(1, partition);
@@ -112,47 +113,42 @@ public class EdgeQueueMapTest {
 			queue = queues.merge(component, ImmutableList.of(
 					Pair.of(queue, weighted(Edge.from(node).to(1), -1.0e308))));
 		}
-		assertEquals(1.0e308, queue.popBestEdge().get().weight, 0.0);
-		assertEquals((-1.5e308 + 1.0e308) + 1.0e308, queue.popBestEdge().get().weight, 0.0);
-		assertFalse(queue.popBestEdge().isPresent());
 	}
 
 	@Test
-	public void testMixedScaleAdjustmentsPreserveHeapOrder() {
-		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2, 3, 4));
-		final EdgeQueueMap<Integer> queues = new EdgeQueueMap<>(partition);
-		EdgeQueue<Integer> queue = EdgeQueue.create(1, partition);
-		queue.addEdge(ExclusiveEdge.of(Edge.from(0).to(1), -1e16));
-		queue.addEdge(ExclusiveEdge.of(Edge.from(3).to(1), -1e16));
-		// Adding 1 twice to -1e16 rounds back to -1e16, but adding 2 at once does not.
-		for (int node : new int[] {2, 4}) {
-			final int component = partition.merge(1, node);
-			queue = queues.merge(component, ImmutableList.of(
-					Pair.of(queue, weighted(Edge.from(node).to(1), -1.0))));
+	public void testUnadjustedWeightsPreserveIdentityAndPriority() {
+		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2, 3, 4, 5));
+		final EdgeQueue<Integer> queue = EdgeQueue.create(0, partition);
+		double[] weights = {Double.MAX_VALUE, 1e16, 1.0, 0.5, -Double.MAX_VALUE};
+		for (int i = 0; i < weights.length; ++i) {
+			queue.addEdge(ExclusiveEdge.of(Edge.from(i + 1).to(0), weights[i]));
 		}
-		final double first = queue.popBestEdge().get().weight;
-		assertTrue(first >= queue.popBestEdge().get().weight);
+		for (int i = 0; i < weights.length; ++i) {
+			final ExclusiveEdge<Integer> next = queue.popBestEdge().get();
+			assertEquals(Edge.from(i + 1).to(0), next.edge);
+			assertEquals(weights[i], next.weight, 0.0);
+		}
 	}
 
 	@Test
-	public void testRandomMixedScaleMergesDrainInOrder() {
+	public void testLongMixedScaleMergesDrainInOrder() {
 		final Random random = new Random(7324);
 		for (int trial = 0; trial < 200; trial++) {
 			final List<Integer> nodes = new ArrayList<>();
 			for (int node = 0; node < 80; node++) nodes.add(node);
 			final Partition<Integer> partition = Partition.singletons(nodes);
-			final EdgeQueueMap<Integer> queues = new EdgeQueueMap<>(partition);
-			EdgeQueue<Integer> queue = EdgeQueue.create(1, partition);
+			final LongEdgeQueueMap<Integer> queues = new LongEdgeQueueMap<>(partition);
+			var queue = LongEdgeQueueMap.EdgeQueue.create(1, partition);
 			for (int source = 40; source < 80; source++) {
-				queue.addEdge(ExclusiveEdge.of(Edge.from(source).to(1), mixedScale(random)));
+				queue.addEdge(LongExclusiveEdge.of(Edge.from(source).to(1), mixedScale(random)));
 			}
 			for (int node = 2; node < 40; node++) {
 				final int component = partition.merge(1, node);
 				queue = queues.merge(component, ImmutableList.of(
-						Pair.of(queue, weighted(Edge.from(node).to(1), mixedScale(random)))));
-				queue.addEdge(ExclusiveEdge.of(Edge.from(40 + node).to(node), mixedScale(random)));
+						Pair.of(queue, LongWeighted.weighted(Edge.from(node).to(1), mixedScale(random)))));
+				queue.addEdge(LongExclusiveEdge.of(Edge.from(40 + node).to(node), mixedScale(random)));
 			}
-			double previous = Double.POSITIVE_INFINITY;
+			long previous = Long.MAX_VALUE;
 			int count = 0;
 			for (var next = queue.popBestEdge(); next.isPresent(); next = queue.popBestEdge()) {
 				assertTrue("Out of order in trial " + trial, next.get().weight <= previous);
@@ -163,17 +159,8 @@ public class EdgeQueueMapTest {
 		}
 	}
 
-	private static double mixedScale(Random random) {
-		return Math.scalb(random.nextDouble() - 0.5, random.nextInt(600) - 300);
-	}
-
-	@Test(expected = ArithmeticException.class)
-	public void testIncomparableWeightRangeIsRejected() {
-		final Partition<Integer> partition = Partition.singletons(ImmutableList.of(0, 1, 2));
-		final EdgeQueue<Integer> queue = EdgeQueue.create(1, partition);
-		queue.addEdge(ExclusiveEdge.of(Edge.from(0).to(1), Double.MAX_VALUE));
-		// Its gap below the other edge is not representable as a finite double.
-		queue.addEdge(ExclusiveEdge.of(Edge.from(2).to(1), -Double.MAX_VALUE));
+	private static long mixedScale(Random random) {
+		return (random.nextInt(17) - 8L) << random.nextInt(52);
 	}
 
 	@Test
