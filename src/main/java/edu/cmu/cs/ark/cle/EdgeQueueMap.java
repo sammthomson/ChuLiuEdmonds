@@ -40,7 +40,8 @@ class EdgeQueueMap<V> {
 		}
 
 		public Optional<ExclusiveEdge<V>> popBestEdge() {
-			return popBestEdge(Arborescence.<V>empty());
+			discardInternalEdges();
+			return root == null ? Optional.absent() : Optional.of(removeBest());
 		}
 
 		/** Always breaks ties in favor of edges in bestArborescence */
@@ -144,20 +145,14 @@ class EdgeQueueMap<V> {
 		queueByDestination.get(destination).addEdge(ExclusiveEdge.of(edge.val, edge.weight));
 	}
 
-	/** Always breaks ties in favor of edges in best */
-	public Optional<ExclusiveEdge<V>> popBestEdge(V component, Arborescence<V> best) {
-		if (!queueByDestination.containsKey(component)) return Optional.absent();
-		return queueByDestination.get(component).popBestEdge(best);
-	}
-
 	/** Consumes the old queues; adjusting each old root implicitly adjusts every edge below it. */
-	public EdgeQueue<V> merge(V component, Iterable<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge) {
+	public EdgeQueue<V> merge(V component, Iterable<Pair<EdgeQueue<V>, ExclusiveEdge<V>>> queuesToMerge) {
 		final EdgeQueue<V> result = EdgeQueue.create(component, partition);
-		for (Pair<EdgeQueue<V>, Weighted<Edge<V>>> queueAndReplace : queuesToMerge) {
+		for (Pair<EdgeQueue<V>, ExclusiveEdge<V>> queueAndReplace : queuesToMerge) {
 			final EdgeQueue<V> queue = queueAndReplace.first;
-			final Weighted<Edge<V>> replace = queueAndReplace.second;
+			final ExclusiveEdge<V> replace = queueAndReplace.second;
 			if (queue.root == null) continue;
-			queue.root.adjust(replace.weight, new Exclusions<>(singletonList(replace.val)));
+			queue.root.adjust(replace.weight, new Exclusions<>(singletonList(replace.edge)));
 			result.root = meld(result.root, queue.root);
 			queue.root = null;
 		}
