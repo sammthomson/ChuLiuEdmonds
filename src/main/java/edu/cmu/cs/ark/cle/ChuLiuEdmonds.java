@@ -34,7 +34,7 @@ public class ChuLiuEdmonds {
 		private final Set<V> visited = Sets.newHashSet();
 		private Set<V> onPath = Sets.newHashSet();
 		// Chosen edges in predecessor order; a cycle is a suffix of this path.
-		private final Deque<Weighted<Edge<V>>> path = new ArrayDeque<>();
+		private final Deque<ExclusiveEdge<V>> path = new ArrayDeque<>();
 		private Optional<V> pendingComponent = Optional.absent();
 		// History of edges we've added, and for each, a list of edges it would exclude.
 		// More recently added edges get priority over less recently added edges when reconstructing the final tree.
@@ -91,32 +91,32 @@ public class ChuLiuEdmonds {
 		 * Merge all SCCs on the given cycle into one SCC.
 		 * Returns the new component.
 		 */
-		private V merge(List<Weighted<Edge<V>>> cycle) {
+		private V merge(List<ExclusiveEdge<V>> cycle) {
 			// build up list of queues that need to be merged, with the edge they would exclude
-			final List<Pair<EdgeQueue<V>, Weighted<Edge<V>>>> queuesToMerge = Lists.newArrayList();
-			for (Weighted<Edge<V>> currentEdge : cycle) {
-				final V destination = stronglyConnected.componentOf(currentEdge.val.destination);
+			final List<Pair<EdgeQueue<V>, ExclusiveEdge<V>>> queuesToMerge = Lists.newArrayList();
+			for (ExclusiveEdge<V> currentEdge : cycle) {
+				final V destination = stronglyConnected.componentOf(currentEdge.edge.destination);
 				final EdgeQueue<V> queue = unseenIncomingEdges.queueByDestination.remove(destination);
 				// if we choose an edge in `queue`, we'll have to throw out `currentEdge` at the end
 				// (each SCC can have only one incoming edge).
 				queuesToMerge.add(Pair.of(queue, currentEdge));
 			}
 			// Merge all SCCs on the cycle into one
-			for (Weighted<Edge<V>> e : cycle) {
-				stronglyConnected.merge(e.val.source, e.val.destination);
+			for (ExclusiveEdge<V> e : cycle) {
+				stronglyConnected.merge(e.edge.source, e.edge.destination);
 			}
-			final V component = stronglyConnected.componentOf(cycle.get(0).val.destination);
+			final V component = stronglyConnected.componentOf(cycle.get(0).edge.destination);
 			// merge the queues and put the merged queue back into our map under the new component
 			unseenIncomingEdges.merge(component, queuesToMerge);
 			return component;
 		}
 
-		private List<Weighted<Edge<V>>> removeCycleSuffix(V repeatedComponent) {
-			final List<Weighted<Edge<V>>> cycle = Lists.newArrayList();
+		private List<ExclusiveEdge<V>> removeCycleSuffix(V repeatedComponent) {
+			final List<ExclusiveEdge<V>> cycle = Lists.newArrayList();
 			V destination;
 			do {
-				final Weighted<Edge<V>> edge = path.removeLast();
-				destination = stronglyConnected.componentOf(edge.val.destination);
+				final ExclusiveEdge<V> edge = path.removeLast();
+				destination = stronglyConnected.componentOf(edge.edge.destination);
 				onPath.remove(destination);
 				cycle.add(edge);
 			} while (!destination.equals(repeatedComponent));
@@ -126,10 +126,9 @@ public class ChuLiuEdmonds {
 		/** Add the edge and continue the growth path, contracting its suffix if the source repeats. */
 		public void addEdge(ExclusiveEdge<V> wEdgeAndExcludes) {
 			final Edge<V> edge = wEdgeAndExcludes.edge;
-			final Weighted<Edge<V>> wEdge = weighted(edge, wEdgeAndExcludes.weight);
 			score = WeightMath.addScore(score, wEdgeAndExcludes.weight);
 			edgesAndWhatTheyExclude.addFirst(wEdgeAndExcludes);
-			path.addLast(wEdge);
+			path.addLast(wEdgeAndExcludes);
 			final V source = stronglyConnected.componentOf(edge.source);
 			if (onPath.contains(source)) {
 				final V component = merge(removeCycleSuffix(source));
@@ -164,12 +163,14 @@ public class ChuLiuEdmonds {
 		}
 
 		public Optional<ExclusiveEdge<V>> popBestEdge(V component) {
-			return popBestEdge(component, Arborescence.<V>empty());
+			final EdgeQueue<V> queue = unseenIncomingEdges.queueByDestination.get(component);
+			return queue == null ? Optional.absent() : queue.popBestEdge();
 		}
 
 		/** Always breaks ties in favor of edges in `best` */
 		public Optional<ExclusiveEdge<V>> popBestEdge(V component, Arborescence<V> best) {
-			return unseenIncomingEdges.popBestEdge(component, best);
+			final EdgeQueue<V> queue = unseenIncomingEdges.queueByDestination.get(component);
+			return queue == null ? Optional.absent() : queue.popBestEdge(best);
 		}
 	}
 

@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import edu.cmu.cs.ark.cle.ds.Partition;
 import edu.cmu.cs.ark.cle.graph.Edge;
-import edu.cmu.cs.ark.cle.util.LongWeighted;
 import edu.cmu.cs.ark.cle.util.Pair;
 import org.junit.Test;
 
@@ -15,7 +14,6 @@ import java.util.Map;
 import java.util.Random;
 
 import static edu.cmu.cs.ark.cle.EdgeQueueMap.EdgeQueue;
-import static edu.cmu.cs.ark.cle.util.Weighted.weighted;
 import static org.junit.Assert.*;
 
 public class EdgeQueueMapTest {
@@ -36,8 +34,8 @@ public class EdgeQueueMapTest {
 		final Edge<Integer> replaceSecond = Edge.from(1).to(2);
 		final int component = partition.merge(1, 2);
 		final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
-				Pair.of(first, weighted(replaceFirst, 8.0)),
-				Pair.of(second, weighted(replaceSecond, 4.0))));
+				Pair.of(first, ExclusiveEdge.of(replaceFirst, 8.0)),
+				Pair.of(second, ExclusiveEdge.of(replaceSecond, 4.0))));
 
 		assertFalse(first.popBestEdge().isPresent());
 		assertFalse(second.popBestEdge().isPresent());
@@ -69,7 +67,7 @@ public class EdgeQueueMapTest {
 		final Edge<Integer> replace = Edge.from(2).to(1);
 		final int component = partition.merge(1, 2);
 		final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
-				Pair.of(queue, weighted(replace, 2.0))));
+				Pair.of(queue, ExclusiveEdge.of(replace, 2.0))));
 
 		final ExclusiveEdge<Integer> infinite = merged.popBestEdge().get();
 		assertEquals(Double.POSITIVE_INFINITY, infinite.weight, 0.0);
@@ -90,7 +88,7 @@ public class EdgeQueueMapTest {
 		final Edge<Integer> replace = Edge.from(2).to(1);
 		final int component = partition.merge(1, 2);
 		final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
-				Pair.of(original, weighted(replace, 5.0))));
+				Pair.of(original, ExclusiveEdge.of(replace, 5.0))));
 		merged.addEdge(ExclusiveEdge.of(Edge.from(4).to(2), 22.0));
 		assertEquals(25.0, merged.popBestEdge().get().weight, 0.0);
 		final ExclusiveEdge<Integer> fresh = merged.popBestEdge().get();
@@ -111,7 +109,7 @@ public class EdgeQueueMapTest {
 		for (int node : new int[] {2, 4}) {
 			final int component = partition.merge(1, node);
 			queue = queues.merge(component, ImmutableList.of(
-					Pair.of(queue, weighted(Edge.from(node).to(1), -1.0e308))));
+					Pair.of(queue, ExclusiveEdge.of(Edge.from(node).to(1), -1.0e308))));
 		}
 	}
 
@@ -145,7 +143,7 @@ public class EdgeQueueMapTest {
 			for (int node = 2; node < 40; node++) {
 				final int component = partition.merge(1, node);
 				queue = queues.merge(component, ImmutableList.of(
-						Pair.of(queue, LongWeighted.weighted(Edge.from(node).to(1), mixedScale(random)))));
+						Pair.of(queue, LongExclusiveEdge.of(Edge.from(node).to(1), mixedScale(random)))));
 				queue.addEdge(LongExclusiveEdge.of(Edge.from(40 + node).to(node), mixedScale(random)));
 			}
 			long previous = Long.MAX_VALUE;
@@ -174,8 +172,8 @@ public class EdgeQueueMapTest {
 		second.addEdge(ExclusiveEdge.of(Edge.from(4).to(2), 10.0));
 		final int component = partition.merge(1, 2);
 		final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
-				Pair.of(first, weighted(Edge.from(2).to(1), 3.0)),
-				Pair.of(second, weighted(Edge.from(1).to(2), 5.0))));
+				Pair.of(first, ExclusiveEdge.of(Edge.from(2).to(1), 3.0)),
+				Pair.of(second, ExclusiveEdge.of(Edge.from(1).to(2), 5.0))));
 		final Arborescence<Integer> preferred = Arborescence.of(ImmutableMap.of(2, 4));
 		final ExclusiveEdge<Integer> selected = merged.popBestEdge(preferred).get();
 		assertEquals(Edge.from(4).to(2), selected.edge);
@@ -223,8 +221,8 @@ public class EdgeQueueMapTest {
 			}
 			final int component = partition.merge(first.second, second.second);
 			final EdgeQueue<Integer> merged = queues.merge(component, ImmutableList.of(
-					Pair.of(first.first, weighted(intoFirst, firstWeight)),
-					Pair.of(second.first, weighted(intoSecond, secondWeight))));
+					Pair.of(first.first, ExclusiveEdge.of(intoFirst, firstWeight)),
+					Pair.of(second.first, ExclusiveEdge.of(intoSecond, secondWeight))));
 			pending.add(Pair.of(merged, component));
 		}
 		final EdgeQueue<Integer> result = pending.get(0).first;
