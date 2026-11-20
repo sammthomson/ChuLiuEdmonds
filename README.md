@@ -20,7 +20,7 @@ sources, and an `-all.jar` with runtime dependencies in `build/libs/`.
 To run only the arborescence tests:
 
 ```sh
-mise run test -- --tests edu.cmu.cs.ark.cle.ChuLiuEdmondsTest --tests edu.cmu.cs.ark.cle.KBestArborescencesTest
+mise run test -- --tests com.samthomson.cle.ChuLiuEdmondsTest --tests com.samthomson.cle.KBestArborescencesTest
 ```
 
 The regression tests independently enumerate small rooted trees to check
