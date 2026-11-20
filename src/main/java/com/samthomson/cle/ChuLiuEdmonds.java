@@ -26,6 +26,9 @@ import static com.samthomson.cle.util.Weighted.weighted;
  * @author sthomson@cs.cmu.edu
  */
 public class ChuLiuEdmonds {
+	// Each link identifies the edge displaced at one level of contraction.
+	private record RootOption<V>(double adjusted, double original, Edge<V> displaced, RootOption<V> child) {}
+
 	/** Represents the subgraph that gets iteratively built up in the CLE algorithm. */
 	static class PartialSolution<V> {
 		// Partition representing the strongly connected components (SCCs).
@@ -44,6 +47,7 @@ public class ChuLiuEdmonds {
 		// running sum of weights.
 		// edge weights are adjusted as we go to take into account the fact that we have an extra edge in each cycle
 		private double score;
+		private Map<V, RootOption<V>> rootOptions; // Only used for single-root decoding.
 
 		private PartialSolution(Partition<V> stronglyConnected,
 								EdgeQueueMap<V> unseenIncomingEdges,
@@ -94,8 +98,18 @@ public class ChuLiuEdmonds {
 		private V merge(List<ExclusiveEdge<V>> cycle) {
 			// build up list of queues that need to be merged, with the edge they would exclude
 			final List<Pair<EdgeQueue<V>, ExclusiveEdge<V>>> queuesToMerge = Lists.newArrayList();
+			RootOption<V> bestRoot = null;
 			for (ExclusiveEdge<V> currentEdge : cycle) {
 				final V destination = stronglyConnected.componentOf(currentEdge.edge.destination);
+				if (rootOptions != null) {
+					final RootOption<V> child = rootOptions.remove(destination);
+					if (child != null) {
+						final double adjusted = WeightMath.subtract(child.adjusted, currentEdge.weight);
+						if (bestRoot == null || adjusted > bestRoot.adjusted) {
+							bestRoot = new RootOption<>(adjusted, child.original, currentEdge.edge, child);
+						}
+					}
+				}
 				final EdgeQueue<V> queue = unseenIncomingEdges.queueByDestination.remove(destination);
 				// if we choose an edge in `queue`, we'll have to throw out `currentEdge` at the end
 				// (each SCC can have only one incoming edge).
@@ -106,6 +120,7 @@ public class ChuLiuEdmonds {
 				stronglyConnected.merge(e.edge.source, e.edge.destination);
 			}
 			final V component = stronglyConnected.componentOf(cycle.get(0).edge.destination);
+			if (bestRoot != null) rootOptions.put(component, bestRoot);
 			// merge the queues and put the merged queue back into our map under the new component
 			unseenIncomingEdges.merge(component, queuesToMerge);
 			return component;
@@ -126,7 +141,7 @@ public class ChuLiuEdmonds {
 		/** Add the edge and continue the growth path, contracting its suffix if the source repeats. */
 		public void addEdge(ExclusiveEdge<V> wEdgeAndExcludes) {
 			final Edge<V> edge = wEdgeAndExcludes.edge;
-			score = WeightMath.addScore(score, wEdgeAndExcludes.weight);
+			if (rootOptions == null) score = WeightMath.addScore(score, wEdgeAndExcludes.weight);
 			edgesAndWhatTheyExclude.addFirst(wEdgeAndExcludes);
 			path.addLast(wEdgeAndExcludes);
 			final V source = stronglyConnected.componentOf(edge.source);
@@ -147,9 +162,12 @@ public class ChuLiuEdmonds {
 		 * So we work backwards, adding edges unless they conflict with edges we've already added.
 		 * Runtime is O(n^2) in the worst case.
 		 */
-		private Weighted<Arborescence<V>> recoverBestArborescence() {
+		private Arborescence<V> recoverBestArborescence(RootOption<V> root) {
 			final ImmutableMap.Builder<V, V> parents = ImmutableMap.builder();
 			final Set<Edge<V>> excluded = Sets.newHashSet();
+			for (; root != null && root.displaced != null; root = root.child) {
+				excluded.add(root.displaced);
+			}
 			// start with the most recent
 			while (!edgesAndWhatTheyExclude.isEmpty()) {
 				final ExclusiveEdge<V> edgeAndWhatItExcludes = edgesAndWhatTheyExclude.removeFirst();
@@ -159,7 +177,7 @@ public class ChuLiuEdmonds {
 					parents.put(edge.destination, edge.source);
 				}
 			}
-			return weighted(Arborescence.of(parents.build()), score);
+			return Arborescence.of(parents.build());
 		}
 
 		public Optional<ExclusiveEdge<V>> popBestEdge(V component) {
@@ -192,17 +210,57 @@ public class ChuLiuEdmonds {
 	 * Find an optimal arborescence of the given graph.
 	 */
 	public static <V> Weighted<Arborescence<V>> getMaxArborescence(WeightedGraph<V> graph) {
+		return solve(graph, null);
+	}
+
+	/** Maximizes original edge weights plus the score of exactly one root.
+	 * Vertices omitted from the map have root score zero; mapped scores must not be null.
+	 * @throws IllegalArgumentException if no eligible root spans the graph
+	 */
+	public static <V> Weighted<Arborescence<V>> getMaxArborescenceWithRootScores(
+			WeightedGraph<V> graph, Map<V, Double> rootScores) {
+		return solve(graph, Objects.requireNonNull(rootScores));
+	}
+
+	private static <V> Weighted<Arborescence<V>> solve(WeightedGraph<V> graph, Map<V, Double> rootScores) {
 		final PartialSolution<V> partialSolution =
 				PartialSolution.initialize(graph.filterEdges(not(Edge.<V>isAutoCycle())));
-		for (Optional<V> next = partialSolution.nextComponent(); next.isPresent();
+		if (rootScores != null) {
+			partialSolution.rootOptions = new HashMap<>();
+			for (V v : graph.getNodes()) {
+				final double value = Objects.requireNonNull(rootScores.getOrDefault(v, (double) 0), "Null root score");
+				if (WeightMath.present(value)) {
+					WeightMath.validateRootScore(value);
+					partialSolution.rootOptions.put(v, new RootOption<>(value, value, null, null));
+				}
+			}
+		}
+		RootOption<V> root = null;
+		for (Optional<V> next = partialSolution.nextComponent();
+			 next.isPresent();
 			 next = partialSolution.nextComponent()) {
 			final V component = next.get();
 			// find maximum edge entering 'component' from outside 'component'.
 			final Optional<ExclusiveEdge<V>> oMaxInEdge = partialSolution.popBestEdge(component);
-			if (!oMaxInEdge.isPresent()) continue; // No in-edges left to consider for this component. Done with it!
-			partialSolution.addEdge(oMaxInEdge.get());
+			if (oMaxInEdge.isPresent()) {
+				partialSolution.addEdge(oMaxInEdge.get());
+			} else if (rootScores != null) {
+				if (root != null) throw new IllegalArgumentException("No single root can reach every vertex");
+				root = partialSolution.rootOptions.get(component);
+				if (root == null) throw new IllegalArgumentException("No eligible root in source component");
+			}
 		}
 		// Once no component has incoming edges left to consider, it's time to recover the optimal branching.
-		return partialSolution.recoverBestArborescence();
+		if (rootScores != null && root == null) {
+			throw new IllegalArgumentException("Cannot choose a root in an empty graph");
+		}
+		final Arborescence<V> tree = partialSolution.recoverBestArborescence(root);
+		if (root == null) return weighted(tree, partialSolution.score);
+		// Avoid cancellation between selected and displaced edges in the reported score.
+		double total = root.original;
+		for (var entry : tree.parents.entrySet()) {
+			total = WeightMath.addScore(total, graph.getWeightOf(entry.getValue(), entry.getKey()));
+		}
+		return weighted(tree, total);
 	}
 }

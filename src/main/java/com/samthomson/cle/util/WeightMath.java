@@ -5,6 +5,9 @@ public final class WeightMath {
 	private WeightMath() {}
 
 	public static boolean present(double weight) { return weight != Double.NEGATIVE_INFINITY; }
+	public static void validateRootScore(double score) {
+		if (!Double.isFinite(score)) throw new IllegalArgumentException("Expected a finite root score: " + score);
+	}
 	public static double missing() { return Double.NEGATIVE_INFINITY; }
 	public static double addScore(double a, double b) { return a + b; }
 

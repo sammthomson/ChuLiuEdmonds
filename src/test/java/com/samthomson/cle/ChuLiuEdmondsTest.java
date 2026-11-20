@@ -109,6 +109,80 @@ public class ChuLiuEdmondsTest {
 	}
 
 	@Test
+	public void testRootScoresAgainstExhaustiveOracle() {
+		Random rng = new Random(4812);
+		for (int trial = 0; trial < 120; trial++) {
+			int n = 1 + rng.nextInt(5);
+			Map<Integer, Double> roots = new HashMap<>();
+			double[][] w = new double[n][n];
+			for (int u = 0; u < n; u++) {
+				int eligibility = rng.nextInt(5);
+				if (eligibility == 0) roots.put(u, NINF);
+				else if (eligibility > 1) roots.put(u, (rng.nextInt(25) - 12) / 4.0);
+				for (int v = 0; v < n; v++) {
+					w[u][v] = rng.nextBoolean() ? NINF : (rng.nextInt(33) - 16) / 4.0;
+				}
+			}
+			var graph = DenseWeightedGraph.from(w);
+			double best = NINF;
+			Set<Arborescence<Integer>> optima = new HashSet<>();
+			for (int r = 0; r < n; r++) {
+				if (roots.getOrDefault(r, 0.0) == NINF) continue;
+				for (var tree : enumerateArborescences(graph, r)) {
+					double score = tree.weight + roots.getOrDefault(r, 0.0);
+					if (score > best) { best = score; optima.clear(); }
+					if (score == best) optima.add(tree.val);
+				}
+			}
+			try {
+				var actual = ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, roots);
+				assertEquals(best, actual.weight, 0.0);
+				assertTrue(optima.contains(actual.val));
+			} catch (IllegalArgumentException e) {
+				if (!optima.isEmpty()) throw e;
+			}
+		}
+	}
+
+	@Test
+	public void testRootScoresExpandNestedCycles() {
+		var graph = LongSparseWeightedGraph.from(ImmutableList.of(
+				longEdge(0, 1, 10), longEdge(1, 0, 10), longEdge(2, 0, 8), longEdge(0, 2, 5)));
+		long high = 1L << 53;
+		var tree = LongChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, high, 1, high + 1));
+		assertEquals(ImmutableMap.of(0, 1, 2, 0), tree.val.parents);
+		assertEquals(high + 16, tree.weight);
+	}
+
+	@Test
+	public void testForbiddenInnerCycleUsesOuterRoot() {
+		var graph = SparseWeightedGraph.from(ImmutableList.of(
+				weighted(Edge.from(0).to(1), 10), weighted(Edge.from(1).to(0), 10),
+				weighted(Edge.from(2).to(0), 8), weighted(Edge.from(0).to(2), 12)));
+		// Either inner vertex could root a weight-22 tree, but neither is eligible.
+		var tree = ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, NINF, 1, NINF));
+		assertEquals(ImmutableMap.of(0, 2, 1, 0), tree.val.parents);
+		assertEquals(18.0, tree.weight, 0.0);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testForbiddenSourceCycleHasNoFeasibleRoot() {
+		var graph = SparseWeightedGraph.from(ImmutableList.of(
+				weighted(Edge.from(0).to(1), 10), weighted(Edge.from(1).to(0), 10),
+				weighted(Edge.from(0).to(2), 12)));
+		// Vertex 2 is eligible but cannot reach the source cycle.
+		ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, NINF, 1, NINF));
+	}
+
+	@Test
+	public void testRootScoresDoNotRequireFinalCycle() {
+		var graph = SparseWeightedGraph.from(ImmutableList.of(weighted(Edge.from("a").to("b"), 2)));
+		var tree = ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of("b", 100.0));
+		assertEquals(ImmutableMap.of("b", "a"), tree.val.parents);
+		assertEquals(2, tree.weight, 0.0);
+	}
+
+	@Test
 	public void testNestedCyclesWithPathLeadingIntoThem() {
 		final WeightedGraph<Integer> graph = nestedCyclesGraph();
 		final Weighted<Arborescence<Integer>> tree = ChuLiuEdmonds.getMaxArborescence(graph, 0);

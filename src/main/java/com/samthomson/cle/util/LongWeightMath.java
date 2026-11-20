@@ -7,6 +7,7 @@ public final class LongWeightMath {
 	private LongWeightMath() {}
 
 	public static boolean present(long weight) { return true; }
+	public static void validateRootScore(long score) { /* Every long is a valid root score. */ }
 	public static long missing() { throw new NoSuchElementException("No such edge"); }
 	public static long addScore(long a, long b) { return Math.addExact(a, b); }
 	public static long subtract(long a, long b) { return Math.subtractExact(a, b); }
