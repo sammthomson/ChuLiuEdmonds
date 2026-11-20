@@ -55,6 +55,33 @@ differently from successive subtractions. On mixed-scale inputs this can change
 the selected tree, the reported score, and the k-best ordering. An undefined or
 overflowing contraction cost throws `ArithmeticException`.
 
+## Single-root dependency parsing
+
+Call `ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, rootScores)` with
+a `Map<V, Double>` keyed by vertex, or use `Map<V, Long>` with `LongChuLiuEdmonds`.
+Omitted vertices remain eligible with a root score of zero; mapped scores must
+not be null. The returned tree has exactly one vertex without a parent; its score is the sum
+of its original edges plus that vertex's root score. An empty graph or one
+with no feasible single root throws `IllegalArgumentException`. Double root
+scores must be finite, except that negative infinity forbids a token as root.
+
+Root scores never compete with ordinary edges. When contracting a cycle, let
+`R[i]` be child component `i`'s best root option and `s[i]` its selected
+incoming edge's **adjusted** weight. Keep the best `R[i] - s[i]`: rooting
+there displaces that edge while keeping the other cycle edges. Backpointers
+record the displaced edges for expansion. Only the option in the component
+with no external incoming edge is used. This requires one pass of the decoder
+and no artificial `ROOT` vertex or large numeric penalty.
+
+[Zmigrod, Vieira & Cotterell (2020), §2.2](https://aclanthology.org/2020.emnlp-main.390/)
+enforce the same constraint by reducing the number of selected `ROOT` edges.
+[Stanojević & Cohen (2021), §§3–4](https://aclanthology.org/2021.emnlp-main.823/)
+describe root preselection and a single-pass reduction that penalizes each
+`ROOT` edge by a large constant. We track root options explicitly instead:
+no repeated decoding, and no penalty that could overflow a `long` or round
+away distinctions between `double` scores. Ordinary contraction rounding
+still applies.
+
 ## Algorithm
 
 The implementation combines Tarjan's cycle contractions with the **growth path**
