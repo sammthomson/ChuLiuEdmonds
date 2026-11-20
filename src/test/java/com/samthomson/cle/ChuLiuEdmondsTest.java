@@ -116,7 +116,9 @@ public class ChuLiuEdmondsTest {
 			Map<Integer, Double> roots = new HashMap<>();
 			double[][] w = new double[n][n];
 			for (int u = 0; u < n; u++) {
-				if (rng.nextInt(5) != 0) roots.put(u, (rng.nextInt(25) - 12) / 4.0);
+				int eligibility = rng.nextInt(5);
+				if (eligibility == 0) roots.put(u, NINF);
+				else if (eligibility > 1) roots.put(u, (rng.nextInt(25) - 12) / 4.0);
 				for (int v = 0; v < n; v++) {
 					w[u][v] = rng.nextBoolean() ? NINF : (rng.nextInt(33) - 16) / 4.0;
 				}
@@ -125,6 +127,7 @@ public class ChuLiuEdmondsTest {
 			double best = NINF;
 			Set<Arborescence<Integer>> optima = new HashSet<>();
 			for (int r = 0; r < n; r++) {
+				if (roots.getOrDefault(r, 0.0) == NINF) continue;
 				for (var tree : enumerateArborescences(graph, r)) {
 					double score = tree.weight + roots.getOrDefault(r, 0.0);
 					if (score > best) { best = score; optima.clear(); }
@@ -149,6 +152,26 @@ public class ChuLiuEdmondsTest {
 		var tree = LongChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, high, 1, high + 1));
 		assertEquals(ImmutableMap.of(0, 1, 2, 0), tree.val.parents);
 		assertEquals(high + 16, tree.weight);
+	}
+
+	@Test
+	public void testForbiddenInnerCycleUsesOuterRoot() {
+		var graph = SparseWeightedGraph.from(ImmutableList.of(
+				weighted(Edge.from(0).to(1), 10), weighted(Edge.from(1).to(0), 10),
+				weighted(Edge.from(2).to(0), 8), weighted(Edge.from(0).to(2), 12)));
+		// Either inner vertex could root a weight-22 tree, but neither is eligible.
+		var tree = ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, NINF, 1, NINF));
+		assertEquals(ImmutableMap.of(0, 2, 1, 0), tree.val.parents);
+		assertEquals(18.0, tree.weight, 0.0);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testForbiddenSourceCycleHasNoFeasibleRoot() {
+		var graph = SparseWeightedGraph.from(ImmutableList.of(
+				weighted(Edge.from(0).to(1), 10), weighted(Edge.from(1).to(0), 10),
+				weighted(Edge.from(0).to(2), 12)));
+		// Vertex 2 is eligible but cannot reach the source cycle.
+		ChuLiuEdmonds.getMaxArborescenceWithRootScores(graph, Map.of(0, NINF, 1, NINF));
 	}
 
 	@Test
